@@ -1,52 +1,41 @@
 pub fn solve1(input: &[String]) {
-    let numbers: Vec<Vec<u32>> = input
+    let numbers: Vec<u32> = input
         .iter()
-        .map(|s| s.chars().map(|c| c.to_digit(10).unwrap()).collect())
+        .map(|s| u32::from_str_radix(s, 2).unwrap())
         .collect();
-    let gamma_bits = most_common_bits(&numbers);
-    let gamma: u32 = bits_to_number(&gamma_bits);
-    let epsilon = ((1 << gamma_bits.len()) - 1) as u32 - gamma;
+    let gamma = most_common_bits(&numbers);
+    let n_bits = input[0].len();
+    let epsilon = ((1 << n_bits) - 1) as u32 - gamma;
     println!("{}", epsilon * gamma);
 
     let mut o2_candidates = numbers.clone();
-    for i in 0.. {
+    for i in (0..n_bits).rev() {
         assert!(o2_candidates.len() > 0);
-        let target = most_common_bits(&o2_candidates)[i];
-        o2_candidates.retain(|candidate| candidate[i] == target);
+        let target = (most_common_bits(&o2_candidates) >> i) & 1;
+        o2_candidates.retain(|candidate| (candidate >> i) & 1 == target);
         if o2_candidates.len() == 1 {
             break;
         }
     }
     let mut co2_candidates = numbers.clone();
-    for i in 0.. {
+    for i in (0..n_bits).rev() {
         assert!(co2_candidates.len() > 0);
-        let target = most_common_bits(&co2_candidates)[i];
-        co2_candidates.retain(|candidate| candidate[i] != target);
+        let target = (most_common_bits(&co2_candidates) >> i) & 1;
+        co2_candidates.retain(|candidate| (candidate >> i) & 1 != target);
         if co2_candidates.len() == 1 {
             break;
         }
     }
-    println!(
-        "{}",
-        bits_to_number(&o2_candidates[0]) * bits_to_number(&co2_candidates[0])
-    );
-}
-fn bits_to_number(xs: &[u32]) -> u32 {
-    xs.iter()
-        .rev()
-        .enumerate()
-        .map(|(i, s)| (1 << i as u32) * s)
-        .sum()
+    println!("{}", o2_candidates[0] * co2_candidates[0]);
 }
 
-fn most_common_bits(numbers: &[Vec<u32>]) -> Vec<u32> {
-    let mut sum = vec![0; numbers[0].len()];
-    for n in numbers.iter() {
-        for (d, s_d) in n.iter().zip(sum.iter_mut()) {
-            *s_d += d;
+fn most_common_bits(numbers: &[u32]) -> u32 {
+    let mut out = 0;
+    for i in 0..32 {
+        let count: u32 = numbers.iter().map(|n| (n >> i) & 1).sum();
+        if count >= (numbers.len() + 1) as u32 / 2 {
+            out += 1 << i;
         }
     }
-    sum.iter()
-        .map(|s| std::cmp::min(1, s * 2 / numbers.len() as u32))
-        .collect()
+    out
 }
