@@ -1,6 +1,6 @@
-struct Display {
-    patterns: Vec<String>,
-    display: Vec<String>,
+struct Display<'a> {
+    patterns: Vec<&'a str>,
+    display: Vec<&'a str>,
 }
 
 pub fn solve1(input: &[String]) {
@@ -9,11 +9,8 @@ pub fn solve1(input: &[String]) {
         .map(|line| {
             let (left, right) = line.split_once(" | ").unwrap();
             Display {
-                patterns: left.split(" ").map(|segs| segs.chars().collect()).collect(),
-                display: right
-                    .split(" ")
-                    .map(|segs| segs.chars().collect())
-                    .collect(),
+                patterns: left.split(" ").collect(),
+                display: right.split(" ").collect(),
             }
         })
         .collect();
@@ -73,7 +70,7 @@ fn apply_permuation(permutation: &[u8], chars: &str) -> String {
         .collect()
 }
 
-fn check_permutation(patterns: &[String], permutation: &[u8], valid: &[&str]) -> bool {
+fn check_permutation(patterns: &[&str], permutation: &[u8], valid: &[&str]) -> bool {
     patterns.iter().all(|pattern| {
         let unsorted = apply_permuation(permutation, pattern);
         let mut s_vec: Vec<char> = unsorted.chars().collect();
