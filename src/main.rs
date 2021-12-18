@@ -72,6 +72,34 @@ fn main() {
         "day9" => {
             day9::solve1(&input);
         }
+        "day10" => {
+            day10::solve1(&input);
+        }
+        "day11" => {
+            day11::solve1(&input);
+        }
+        "day12" => {
+            day12::solve1(&input);
+        }
+        "day13" => {
+            day13::solve1(&input);
+        }
+        "day14" => {
+            day14::solve1(&input);
+        }
+        "day15" => {
+            day15::solve1(&input);
+        }
+        "day16" => {
+            day16::solve1(&input);
+        }
+        "day17" => {
+            day17::solve1(&input);
+        }
+        "day18" => {
+            day18::solve1(&input);
+            day18::solve2(&input);
+        }
         _ => panic!("Unexpected problem name"),
     }
     #[cfg(feature = "profiler")]
