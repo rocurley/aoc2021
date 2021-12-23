@@ -39,6 +39,7 @@ impl Pod {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 struct State {
+    room_depth: usize,
     cost: usize,
     rooms: [Vec<Pod>; 4],
     left: [Option<Pod>; 2],
@@ -137,8 +138,6 @@ const ALL_LOCATIONS: [Location; 11] = [
     Location::Mid(2),
 ];
 
-const ROOM_DEPTH: usize = 4;
-
 fn top_pod(state: &State, loc: Location) -> Option<Pod> {
     use Location::*;
     match loc {
@@ -184,7 +183,7 @@ fn exterior_distance(start: Location, end: Location) -> usize {
 fn top_exit_distance(state: &State, loc: Location) -> usize {
     use Location::*;
     match loc {
-        Room(i) => ROOM_DEPTH - state.rooms[i].len(),
+        Room(i) => state.room_depth - state.rooms[i].len(),
         _ => 0,
     }
 }
@@ -231,13 +230,13 @@ fn path(state: &State, start: Location, end: Location) -> Option<usize> {
     }
     let base_distance = exterior_distance(start, end);
     let exit_distance = match start {
-        Room(i) => ROOM_DEPTH + 1 - state.rooms[i].len(),
+        Room(i) => state.room_depth + 1 - state.rooms[i].len(),
         Left(_) => 0,
         Right(_) => 0,
         Mid(_) => 0,
     };
     let entrence_distance = match end {
-        Room(i) => ROOM_DEPTH - state.rooms[i].len(),
+        Room(i) => state.room_depth - state.rooms[i].len(),
         Left(_) => 0,
         Right(_) => 0,
         Mid(_) => 0,
@@ -288,10 +287,9 @@ impl State {
         })
     }
     fn is_solved(&self) -> bool {
-        self.rooms
-            .iter()
-            .enumerate()
-            .all(|(i, room)| room.len() == ROOM_DEPTH && room[0].room() == i && room[1].room() == i)
+        self.rooms.iter().enumerate().all(|(i, room)| {
+            room.len() == self.room_depth && room[0].room() == i && room[1].room() == i
+        })
     }
     fn heuristic(&self) -> usize {
         let room_exit_cost: usize = self
@@ -306,7 +304,7 @@ impl State {
                     } else {
                         let exit_distance =
                             exterior_distance(Location::Room(i), Location::Room(pod.room()))
-                                + ROOM_DEPTH
+                                + self.room_depth
                                 - j;
                         pod.cost() * exit_distance
                     }
@@ -319,12 +317,12 @@ impl State {
             .enumerate()
             .flat_map(|(i, room)| {
                 let expected_pod = Pod::of_room(i);
-                (0..ROOM_DEPTH).map(move |j| {
+                (0..self.room_depth).map(move |j| {
                     let pod = room.get(j);
                     if pod == Some(&expected_pod) {
                         0
                     } else {
-                        expected_pod.cost() * (ROOM_DEPTH - j)
+                        expected_pod.cost() * (self.room_depth - j)
                     }
                 })
             })
@@ -365,6 +363,7 @@ impl State {
 
 pub fn solve1(input: &[String]) {
     let initial_state = State {
+        room_depth: 4,
         cost: 0,
         left: [None; 2],
         right: [None; 2],
@@ -448,6 +447,7 @@ fn test_block() {
       #########
     */
     let initial_state = State {
+        room_depth: 2,
         cost: 0,
         left: [None; 2],
         right: [None, Some(Pod::D)],
@@ -468,6 +468,7 @@ fn test_block() {
 #[test]
 fn test_known_solution() {
     let mut state = State {
+        room_depth: 2,
         cost: 0,
         left: [None; 2],
         right: [None; 2],
@@ -520,6 +521,7 @@ fn test_heuristic() {
       #########
     */
     let initial_state = State {
+        room_depth: 2,
         cost: 0,
         left: [None; 2],
         right: [None; 2],
@@ -533,6 +535,7 @@ fn test_heuristic() {
     };
     assert_eq!(initial_state.cost + initial_state.heuristic(), 12324);
     let state = State {
+        room_depth: 2,
         cost: 200,
         left: [None; 2],
         right: [None; 2],
