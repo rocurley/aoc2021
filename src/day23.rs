@@ -137,6 +137,8 @@ const ALL_LOCATIONS: [Location; 11] = [
     Location::Mid(2),
 ];
 
+const ROOM_DEPTH: usize = 2;
+
 fn top_pod(state: &State, loc: Location) -> Option<Pod> {
     use Location::*;
     match loc {
@@ -182,7 +184,7 @@ fn exterior_distance(start: Location, end: Location) -> usize {
 fn top_exit_distance(state: &State, loc: Location) -> usize {
     use Location::*;
     match loc {
-        Room(i) => 2 - state.rooms[i].len(),
+        Room(i) => ROOM_DEPTH - state.rooms[i].len(),
         _ => 0,
     }
 }
@@ -229,13 +231,13 @@ fn path(state: &State, start: Location, end: Location) -> Option<usize> {
     }
     let base_distance = exterior_distance(start, end);
     let exit_distance = match start {
-        Room(i) => 3 - state.rooms[i].len(),
+        Room(i) => ROOM_DEPTH + 1 - state.rooms[i].len(),
         Left(_) => 0,
         Right(_) => 0,
         Mid(_) => 0,
     };
     let entrence_distance = match end {
-        Room(i) => 2 - state.rooms[i].len(),
+        Room(i) => ROOM_DEPTH - state.rooms[i].len(),
         Left(_) => 0,
         Right(_) => 0,
         Mid(_) => 0,
@@ -274,34 +276,57 @@ impl State {
     }
     fn moves<'a>(&'a self) -> impl Iterator<Item = Self> + 'a {
         ALL_LOCATIONS.iter().flat_map(move |&i| {
-            ALL_LOCATIONS
-                .iter()
-                .filter_map(move |&j| self.apply_move(i, j))
+            ALL_LOCATIONS.iter().filter_map(move |&j| {
+                let child = self.apply_move(i, j)?;
+                if child.cost + child.heuristic() < self.cost + self.heuristic() {
+                    self.print();
+                    child.print();
+                    panic!("Heuristic violation");
+                }
+                Some(child)
+            })
         })
     }
     fn is_solved(&self) -> bool {
         self.rooms
             .iter()
             .enumerate()
-            .all(|(i, room)| room.len() == 2 && room[0].room() == i && room[1].room() == i)
+            .all(|(i, room)| room.len() == ROOM_DEPTH && room[0].room() == i && room[1].room() == i)
     }
     fn heuristic(&self) -> usize {
-        let room_cost: usize = self
+        let room_exit_cost: usize = self
             .rooms
             .iter()
             .enumerate()
-            .map(|(i, room)| {
+            .flat_map(|(i, room)| {
                 let expected_pod = Pod::of_room(i);
-                let distance = (if room.get(0) == Some(&expected_pod) {
-                    0
-                } else {
-                    2
-                }) + (if room.get(1) == Some(&expected_pod) {
-                    0
-                } else {
-                    1
-                });
-                distance * expected_pod.cost()
+                room.iter().enumerate().map(move |(j, pod)| {
+                    if *pod == expected_pod {
+                        0
+                    } else {
+                        let exit_distance =
+                            exterior_distance(Location::Room(i), Location::Room(pod.room()))
+                                + ROOM_DEPTH
+                                - j;
+                        pod.cost() * exit_distance
+                    }
+                })
+            })
+            .sum();
+        let room_entrance_cost: usize = self
+            .rooms
+            .iter()
+            .enumerate()
+            .flat_map(|(i, room)| {
+                let expected_pod = Pod::of_room(i);
+                (0..ROOM_DEPTH).map(move |j| {
+                    let pod = room.get(j);
+                    if pod == Some(&expected_pod) {
+                        0
+                    } else {
+                        expected_pod.cost() * (ROOM_DEPTH - j)
+                    }
+                })
             })
             .sum();
         let left_cost: usize = self
@@ -334,7 +359,7 @@ impl State {
                 Some(distance * pod.cost())
             })
             .sum();
-        room_cost + left_cost + right_cost + mid_cost
+        room_exit_cost + room_entrance_cost + left_cost + right_cost + mid_cost
     }
 }
 
@@ -478,4 +503,46 @@ fn test_known_solution() {
     }
     assert!(state.is_solved());
     assert_eq!(state.cost, 12521);
+}
+
+#[test]
+fn test_heuristic() {
+    /*
+    #############
+    #...........#
+    ###C#D#D#A###
+      #B#A#B#C#
+      #########
+    #############
+    #...C.......#
+    ###.#D#D#A###
+      #B#A#B#C#
+      #########
+    */
+    let initial_state = State {
+        cost: 0,
+        left: [None; 2],
+        right: [None; 2],
+        mids: [None; 3],
+        rooms: [
+            vec![Pod::B, Pod::C],
+            vec![Pod::A, Pod::D],
+            vec![Pod::B, Pod::D],
+            vec![Pod::C, Pod::A],
+        ],
+    };
+    assert_eq!(initial_state.cost + initial_state.heuristic(), 12324);
+    let state = State {
+        cost: 200,
+        left: [None; 2],
+        right: [None; 2],
+        mids: [Some(Pod::C), None, None],
+        rooms: [
+            vec![Pod::B],
+            vec![Pod::A, Pod::D],
+            vec![Pod::B, Pod::D],
+            vec![Pod::C, Pod::A],
+        ],
+    };
+    assert_eq!(state.cost + state.heuristic(), 12324);
 }
