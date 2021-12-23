@@ -137,7 +137,7 @@ const ALL_LOCATIONS: [Location; 11] = [
     Location::Mid(2),
 ];
 
-const ROOM_DEPTH: usize = 2;
+const ROOM_DEPTH: usize = 4;
 
 fn top_pod(state: &State, loc: Location) -> Option<Pod> {
     use Location::*;
@@ -370,10 +370,10 @@ pub fn solve1(input: &[String]) {
         right: [None; 2],
         mids: [None; 3],
         rooms: [
-            vec![Pod::B, Pod::C],
-            vec![Pod::A, Pod::D],
-            vec![Pod::B, Pod::D],
-            vec![Pod::C, Pod::A],
+            vec![Pod::B, Pod::D, Pod::D, Pod::C],
+            vec![Pod::A, Pod::B, Pod::C, Pod::D],
+            vec![Pod::B, Pod::A, Pod::B, Pod::D],
+            vec![Pod::C, Pod::C, Pod::A, Pod::A],
         ],
     };
     /*
