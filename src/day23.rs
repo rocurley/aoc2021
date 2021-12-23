@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
 
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Hash)]
 enum Pod {
     A,
     B,
@@ -37,7 +37,7 @@ impl Pod {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug, Hash)]
 struct State {
     room_depth: usize,
     cost: usize,
@@ -85,18 +85,20 @@ impl State {
         );
         println!(
             "###{}#{}#{}#{}###",
-            show_pod(self.rooms[0].get(1).copied()),
-            show_pod(self.rooms[1].get(1).copied()),
-            show_pod(self.rooms[2].get(1).copied()),
-            show_pod(self.rooms[3].get(1).copied()),
+            show_pod(self.rooms[0].get(self.room_depth - 1).copied()),
+            show_pod(self.rooms[1].get(self.room_depth - 1).copied()),
+            show_pod(self.rooms[2].get(self.room_depth - 1).copied()),
+            show_pod(self.rooms[3].get(self.room_depth - 1).copied()),
         );
-        println!(
-            "  #{}#{}#{}#{}#  ",
-            show_pod(self.rooms[0].get(0).copied()),
-            show_pod(self.rooms[1].get(0).copied()),
-            show_pod(self.rooms[2].get(0).copied()),
-            show_pod(self.rooms[3].get(0).copied()),
-        );
+        for i in (0..self.room_depth - 1).rev() {
+            println!(
+                "  #{}#{}#{}#{}#  ",
+                show_pod(self.rooms[0].get(i).copied()),
+                show_pod(self.rooms[1].get(i).copied()),
+                show_pod(self.rooms[2].get(i).copied()),
+                show_pod(self.rooms[3].get(i).copied()),
+            );
+        }
         println!("  #########  ");
     }
 }
@@ -390,7 +392,8 @@ pub fn solve1(input: &[String]) {
     };
     */
     dbg!(initial_state.heuristic());
-    let do_trace = false;
+    let do_trace = true;
+    let mut seen = HashSet::new();
     if do_trace {
         let mut heap = BinaryHeap::new();
         heap.push(StateTrace {
@@ -399,6 +402,13 @@ pub fn solve1(input: &[String]) {
         let cost = loop {
             let trace = heap.pop().unwrap();
             let state = trace.trace.last().unwrap();
+            let seen_check = State {
+                cost: 0,
+                ..state.clone()
+            };
+            if seen.contains(&seen_check) {
+                continue;
+            }
             if state.is_solved() {
                 for ss in trace.trace.windows(2) {
                     println!("Cost:{}", ss[1].cost - ss[0].cost);
@@ -420,6 +430,14 @@ pub fn solve1(input: &[String]) {
         heap.push(initial_state);
         let cost = loop {
             let state = heap.pop().unwrap();
+            let seen_check = State {
+                cost: 0,
+                ..state.clone()
+            };
+            if seen.contains(&seen_check) {
+                continue;
+            }
+            seen.insert(seen_check);
             if state.is_solved() {
                 break state.cost;
             }
