@@ -113,6 +113,9 @@ fn main() {
         "day22" => {
             day22::solve1(&input);
         }
+        "day23" => {
+            day23::solve1(&input);
+        }
         _ => panic!("Unexpected problem name"),
     }
     #[cfg(feature = "profiler")]
