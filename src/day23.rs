@@ -275,18 +275,27 @@ impl State {
         out.push_pod(j, pod);
         Some(out)
     }
-    fn moves<'a>(&'a self) -> impl Iterator<Item = Self> + 'a {
-        ALL_LOCATIONS.iter().flat_map(move |&i| {
-            ALL_LOCATIONS.iter().filter_map(move |&j| {
-                let child = self.apply_move(i, j)?;
+    fn moves<'a>(&'a self) -> Vec<Self> {
+        let mut out = Vec::new();
+        for &dest in &ALL_LOCATIONS {
+            for &source in &ALL_LOCATIONS {
+                let child = if let Some(c) = self.apply_move(source, dest) {
+                    c
+                } else {
+                    continue;
+                };
                 if child.cost + child.heuristic() < self.cost + self.heuristic() {
                     self.print();
                     child.print();
                     panic!("Heuristic violation");
                 }
-                Some(child)
-            })
-        })
+                out.push(child);
+                if let Location::Room(_) = dest {
+                    return out;
+                }
+            }
+        }
+        out
     }
     fn is_solved(&self) -> bool {
         self.rooms.iter().enumerate().all(|(i, room)| {
@@ -392,14 +401,16 @@ pub fn solve1(input: &[String]) {
     };
     */
     dbg!(initial_state.heuristic());
-    let do_trace = true;
+    let do_trace = false;
     let mut seen = HashSet::new();
+    let mut iterations = 0;
     if do_trace {
         let mut heap = BinaryHeap::new();
         heap.push(StateTrace {
             trace: vec![initial_state],
         });
         let cost = loop {
+            iterations += 1;
             let trace = heap.pop().unwrap();
             let state = trace.trace.last().unwrap();
             let seen_check = State {
@@ -417,7 +428,9 @@ pub fn solve1(input: &[String]) {
                 break state.cost;
             }
             let min_cost = state.cost + state.heuristic();
-            dbg!(min_cost, heap.len());
+            if iterations % 100000 == 0 {
+                dbg!(min_cost, heap.len());
+            }
             for child in state.moves() {
                 let mut new_trace = trace.clone();
                 new_trace.trace.push(child);
@@ -429,6 +442,7 @@ pub fn solve1(input: &[String]) {
         let mut heap = BinaryHeap::new();
         heap.push(initial_state);
         let cost = loop {
+            iterations += 1;
             let state = heap.pop().unwrap();
             let seen_check = State {
                 cost: 0,
@@ -447,6 +461,7 @@ pub fn solve1(input: &[String]) {
         };
         dbg!(cost);
     }
+    dbg!(iterations);
 }
 
 #[test]
