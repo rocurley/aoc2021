@@ -12,20 +12,24 @@ pub fn solve1(input: &[String]) {
     }
     let parsing = Instant::now();
     let mut count = 0;
-    let mut stack = vec![vec![Cave::Start]];
-    while let Some(path) = stack.pop() {
-        for &neighbor in &edges[path.last().unwrap()] {
+    let mut stack = vec![(Cave::Start, 0)];
+    while let Some((head, seen)) = stack.pop() {
+        for &neighbor in &edges[&head] {
+            if neighbor == Cave::Start {
+                continue;
+            }
             if neighbor == Cave::End {
                 count += 1;
                 continue;
             }
-            let is_small = !matches!(neighbor, Cave::Large(_));
-            if is_small && path.contains(&neighbor) {
-                continue;
+            let mut new_seen = seen;
+            if let Some(neighbor_onehot) = neighbor.small_onehot() {
+                if (seen & neighbor_onehot) > 0 {
+                    continue;
+                }
+                new_seen |= neighbor_onehot;
             }
-            let mut new_path = path.clone();
-            new_path.push(neighbor);
-            stack.push(new_path);
+            stack.push((neighbor, new_seen));
         }
     }
     let part1_solve = Instant::now();
@@ -110,10 +114,10 @@ impl Cave {
 
 pub fn solve2_inner(edges: &HashMap<Cave, Vec<Cave>>) -> usize {
     let mut small_loops: HashMap<u16, usize> = HashMap::new();
-    for &k in edges.keys().filter(|k| k.is_small()) {
-        let mut stack = vec![vec![k]];
-        while let Some(path) = stack.pop() {
-            for &neighbor in &edges[path.last().unwrap()] {
+    for (k, onehot) in edges.keys().filter_map(|k| Some((*k, k.small_onehot()?))) {
+        let mut stack = vec![(k, onehot)];
+        while let Some((head, seen)) = stack.pop() {
+            for &neighbor in &edges[&head] {
                 if neighbor == Cave::Start {
                     continue;
                 }
@@ -121,52 +125,44 @@ pub fn solve2_inner(edges: &HashMap<Cave, Vec<Cave>>) -> usize {
                     continue;
                 }
                 if neighbor == k {
-                    let ix = path
-                        .iter()
-                        .copied()
-                        .filter_map(|x| x.small_onehot())
-                        .fold(0, |acc, onehot| acc | onehot);
-                    *small_loops.entry(ix).or_insert(0) += 1;
+                    *small_loops.entry(seen).or_insert(0) += 1;
                     continue;
                 }
-                let is_small = neighbor.is_small();
-                if is_small && (path.contains(&neighbor) || neighbor < k) {
-                    continue;
+                let mut new_seen = seen;
+                if let Some(neighbor_onehot) = neighbor.small_onehot() {
+                    if (seen & neighbor_onehot) > 0 || neighbor < k {
+                        continue;
+                    }
+                    new_seen |= neighbor_onehot;
                 }
-                let mut new_path = path.clone();
-                new_path.push(neighbor);
-                stack.push(new_path);
+                stack.push((neighbor, new_seen));
             }
         }
     }
     let mut count = 0;
-    let mut stack = vec![vec![Cave::Start]];
-    while let Some(path) = stack.pop() {
-        let small_mask = path
-            .iter()
-            .copied()
-            .filter_map(|x| x.small_onehot())
-            .fold(0, |acc, onehot| acc | onehot);
-        for &neighbor in &edges[path.last().unwrap()] {
+    let mut stack = vec![(Cave::Start, 0)];
+    while let Some((head, seen)) = stack.pop() {
+        for &neighbor in &edges[&head] {
             if neighbor == Cave::Start {
                 continue;
             }
             if neighbor == Cave::End {
                 count += 1;
                 for (small_loop, loop_count) in small_loops.iter() {
-                    if (small_loop & small_mask).count_ones() == 1 {
+                    if (small_loop & seen).count_ones() == 1 {
                         count += loop_count;
                     }
                 }
                 continue;
             }
-            let is_small = neighbor.is_small();
-            if is_small && path.contains(&neighbor) {
-                continue;
+            let mut new_seen = seen;
+            if let Some(neighbor_onehot) = neighbor.small_onehot() {
+                if (seen & neighbor_onehot) > 0 {
+                    continue;
+                }
+                new_seen |= neighbor_onehot;
             }
-            let mut new_path = path.clone();
-            new_path.push(neighbor);
-            stack.push(new_path);
+            stack.push((neighbor, new_seen));
         }
     }
     count
