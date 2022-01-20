@@ -1,4 +1,4 @@
-use aoc2021::day12::{parse, solve2_inner};
+use aoc2021::day12::{parse, solve_inner};
 use criterion::profiler::Profiler;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use pprof::protos::Message;
@@ -18,7 +18,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("solve2", |b| {
         b.iter(|| {
             let edges = parse(&input);
-            solve2_inner(&edges)
+            solve_inner(&edges)
         })
     });
 }

@@ -7,49 +7,14 @@ pub fn solve1(input: &[String]) {
     let start = Instant::now();
     let edges = parse(input);
     let parsing = Instant::now();
-    let mut count = 0;
-    let mut stack = vec![Path {
-        head: Cave::Start,
-        seen: 0,
-        weight: 1,
-    }];
-    while let Some(path) = stack.pop() {
-        for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
-            if neighbor == Cave::Start {
-                continue;
-            }
-            let weight = path.weight * neighbor_weight;
-            if neighbor == Cave::End {
-                count += weight;
-                continue;
-            }
-            let mut new_seen = path.seen;
-            if let Some(neighbor_onehot) = neighbor.small_onehot() {
-                if (path.seen & neighbor_onehot) > 0 {
-                    continue;
-                }
-                new_seen |= neighbor_onehot;
-            }
-            stack.push(Path {
-                head: neighbor,
-                seen: new_seen,
-                weight,
-            });
-        }
-    }
-    let part1_solve = Instant::now();
-    dbg!(count);
-    let part1_print = Instant::now();
-
-    let count = solve2_inner(&edges);
-    let part2_solve = Instant::now();
-    dbg!(count);
-    let part2_print = Instant::now();
+    let (sol1, sol2) = solve_inner(&edges);
+    let solve = Instant::now();
+    println!("Part 1: {}", sol1);
+    println!("Part 2: {}", sol2);
+    let print = Instant::now();
     println!("Parsing: {:?}", parsing - start);
-    println!("Part 1 solve: {:?}", part1_solve - parsing);
-    println!("Part 1 print: {:?}", part1_print - part1_solve);
-    println!("Part 2 solve: {:?}", part2_solve - part1_print);
-    println!("Part 2 print: {:?}", part2_print - part2_solve);
+    println!("Part 2 solve: {:?}", solve - parsing);
+    println!("Part 2 print: {:?}", print - solve);
 }
 
 pub struct Path {
@@ -210,7 +175,7 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<Vec<(Cave, usize)>> {
     edges
 }
 
-pub fn solve2_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> usize {
+pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
     let mut small_loops: HashMap<u16, usize> = HashMap::new();
     for i in 0..16 {
         let k = Cave::Small(i);
@@ -288,5 +253,5 @@ pub fn solve2_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> usize {
             });
         }
     }
-    count
+    (one_count, count)
 }
