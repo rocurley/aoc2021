@@ -3,36 +3,67 @@ use std::default::Default;
 use std::ops::{Index, IndexMut};
 use std::time::Instant;
 
+// TODO: Eliminate large caves entirely! You can do this by storing a weight between any two small
+// caves. This weight is the number of paths between them using only large caves. This should make
+// it possible to slim things down quite a bit.
 pub fn solve1(input: &[String]) {
     let start = Instant::now();
-    let mut edges = CaveMap::new();
+    let mut big_edges = HashMap::new();
     let mut parser = CaveParser::new();
+    let mut edges_raw = HashMap::new();
     for (x, y) in input.iter().map(|line| line.split_once("-").unwrap()) {
-        let x = parser.parse(x);
-        let y = parser.parse(y);
-        edges[x].get_or_insert_with(|| Vec::new()).push(y);
-        edges[y].get_or_insert_with(|| Vec::new()).push(x);
+        match (parser.parse(x), parser.parse(y)) {
+            (None, None) => panic!("Cannot connect two big caves"),
+            (Some(x), Some(y)) => {
+                let k = if x < y { (x, y) } else { (y, x) };
+                assert!(edges_raw.insert(k, 1).is_none());
+            }
+            (None, Some(y)) => big_edges.entry(x).or_insert(Vec::new()).push(y),
+            (Some(x), None) => big_edges.entry(y).or_insert(Vec::new()).push(x),
+        }
+    }
+    for small_caves in big_edges.into_values() {
+        for (i, &x) in small_caves.iter().enumerate() {
+            for &y in small_caves[i + 1..].iter() {
+                let k = if x < y { (x, y) } else { (y, x) };
+                *edges_raw.entry(k).or_insert(0) += 1;
+            }
+        }
+    }
+    let mut edges = CaveMap::new();
+    for ((x, y), c) in edges_raw.into_iter() {
+        edges[x].get_or_insert(Vec::new()).push((y, c));
+        edges[y].get_or_insert(Vec::new()).push((x, c));
     }
     let parsing = Instant::now();
     let mut count = 0;
-    let mut stack = vec![(Cave::Start, 0)];
-    while let Some((head, seen)) = stack.pop() {
-        for &neighbor in edges[head].as_ref().unwrap() {
+    let mut stack = vec![Path {
+        head: Cave::Start,
+        seen: 0,
+        weight: 1,
+    }];
+    while let Some(path) = stack.pop() {
+        for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
             if neighbor == Cave::Start {
                 continue;
             }
+            let weight = path.weight * neighbor_weight;
             if neighbor == Cave::End {
-                count += 1;
+                count += weight;
                 continue;
             }
-            let mut new_seen = seen;
+            let mut new_seen = path.seen;
             if let Some(neighbor_onehot) = neighbor.small_onehot() {
-                if (seen & neighbor_onehot) > 0 {
+                if (path.seen & neighbor_onehot) > 0 {
                     continue;
                 }
                 new_seen |= neighbor_onehot;
             }
-            stack.push((neighbor, new_seen));
+            stack.push(Path {
+                head: neighbor,
+                seen: new_seen,
+                weight,
+            });
         }
     }
     let part1_solve = Instant::now();
@@ -50,49 +81,43 @@ pub fn solve1(input: &[String]) {
     println!("Part 2 print: {:?}", part2_print - part2_solve);
 }
 
+pub struct Path {
+    head: Cave,
+    seen: u16,
+    weight: usize,
+}
+
 pub struct CaveParser<'a> {
     smalls: Vec<&'a str>,
-    larges: Vec<&'a str>,
 }
 
 impl<'a> CaveParser<'a> {
     pub fn new() -> Self {
-        CaveParser {
-            smalls: Vec::new(),
-            larges: Vec::new(),
-        }
+        CaveParser { smalls: Vec::new() }
     }
-    pub fn parse(&mut self, k: &'a str) -> Cave {
+    pub fn parse(&mut self, k: &'a str) -> Option<Cave> {
         if k == "start" {
-            return Cave::Start;
+            return Some(Cave::Start);
         }
         if k == "end" {
-            return Cave::End;
+            return Some(Cave::End);
         }
         let is_small = k.chars().next().unwrap().is_lowercase();
-        if is_small {
-            match self.smalls.iter().position(|x| *x == k) {
-                None => {
-                    self.smalls.push(k);
-                    assert!(self.smalls.len() <= 16);
-                    Cave::Small(self.smalls.len() as u8 - 1)
-                }
-                Some(i) => Cave::Small(i as u8),
+        if !is_small {
+            return None;
+        }
+        match self.smalls.iter().position(|x| *x == k) {
+            None => {
+                self.smalls.push(k);
+                assert!(self.smalls.len() <= 16);
+                Some(Cave::Small(self.smalls.len() as u8 - 1))
             }
-        } else {
-            match self.larges.iter().position(|x| *x == k) {
-                None => {
-                    self.larges.push(k);
-                    assert!(self.larges.len() <= 16);
-                    Cave::Large(self.larges.len() as u8 - 1)
-                }
-                Some(i) => Cave::Large(i as u8),
-            }
+            Some(i) => Some(Cave::Small(i as u8)),
         }
     }
 }
 
-#[derive(PartialEq, Eq, Copy, Clone, Hash, Ord, PartialOrd)]
+#[derive(PartialEq, Eq, Copy, Clone, Hash, Ord, PartialOrd, Debug)]
 pub enum Cave {
     Start,
     End,
@@ -189,64 +214,85 @@ fn iter_caves() -> impl Iterator<Item=Cave> {
 }
 */
 
-pub fn solve2_inner(edges: &CaveMap<Vec<Cave>>) -> usize {
+pub fn solve2_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> usize {
     let mut small_loops: HashMap<u16, usize> = HashMap::new();
     for i in 0..16 {
-        //for (k, onehot) in edges.keys().filter_map(|k| Some((*k, k.small_onehot()?))) {
         let k = Cave::Small(i);
         if edges[k].is_none() {
             continue;
         }
         let onehot = 1 << i;
-        let mut stack = vec![(k, onehot)];
-        while let Some((head, seen)) = stack.pop() {
-            for &neighbor in edges[head].as_ref().unwrap() {
+        let mut stack = vec![Path {
+            head: k,
+            seen: onehot,
+            weight: 1,
+        }];
+        while let Some(path) = stack.pop() {
+            for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
                 if neighbor == Cave::Start {
                     continue;
                 }
                 if neighbor == Cave::End {
                     continue;
                 }
+                let weight = path.weight * neighbor_weight;
                 if neighbor == k {
-                    *small_loops.entry(seen).or_insert(0) += 1;
+                    *small_loops.entry(path.seen).or_insert(0) += weight;
                     continue;
                 }
-                let mut new_seen = seen;
+                let mut new_seen = path.seen;
                 if let Some(neighbor_onehot) = neighbor.small_onehot() {
-                    if (seen & neighbor_onehot) > 0 || neighbor < k {
+                    if (path.seen & neighbor_onehot) > 0 || neighbor < k {
                         continue;
                     }
                     new_seen |= neighbor_onehot;
                 }
-                stack.push((neighbor, new_seen));
+                stack.push(Path {
+                    head: neighbor,
+                    seen: new_seen,
+                    weight,
+                });
             }
         }
     }
+    dbg!(&small_loops);
+    let mut one_count = 0;
     let mut count = 0;
-    let mut stack = vec![(Cave::Start, 0)];
-    while let Some((head, seen)) = stack.pop() {
-        for &neighbor in edges[head].as_ref().unwrap() {
+    let mut stack = vec![Path {
+        head: Cave::Start,
+        seen: 0,
+        weight: 1,
+    }];
+    while let Some(path) = stack.pop() {
+        for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
             if neighbor == Cave::Start {
                 continue;
             }
+            let weight = path.weight * neighbor_weight;
             if neighbor == Cave::End {
-                count += 1;
+                count += weight;
+                one_count += weight;
                 for (small_loop, loop_count) in small_loops.iter() {
-                    if (small_loop & seen).count_ones() == 1 {
-                        count += loop_count;
+                    if (small_loop & path.seen).count_ones() == 1 {
+                        count += weight * loop_count;
                     }
                 }
                 continue;
             }
-            let mut new_seen = seen;
+            let mut new_seen = path.seen;
             if let Some(neighbor_onehot) = neighbor.small_onehot() {
-                if (seen & neighbor_onehot) > 0 {
+                if (path.seen & neighbor_onehot) > 0 {
                     continue;
                 }
                 new_seen |= neighbor_onehot;
             }
-            stack.push((neighbor, new_seen));
+            stack.push(Path {
+                head: neighbor,
+                seen: new_seen,
+                weight,
+            });
         }
     }
+    dbg!(one_count);
     count
 }
