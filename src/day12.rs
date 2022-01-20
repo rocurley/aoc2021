@@ -3,9 +3,6 @@ use std::default::Default;
 use std::ops::{Index, IndexMut};
 use std::time::Instant;
 
-// TODO: Eliminate large caves entirely! You can do this by storing a weight between any two small
-// caves. This weight is the number of paths between them using only large caves. This should make
-// it possible to slim things down quite a bit.
 pub fn solve1(input: &[String]) {
     let start = Instant::now();
     let edges = parse(input);
@@ -96,7 +93,6 @@ pub enum Cave {
     Start,
     End,
     Small(u8),
-    Large(u8),
 }
 
 impl Cave {
@@ -119,7 +115,6 @@ pub struct CaveSet {
     start: bool,
     end: bool,
     small: u16,
-    large: u16,
 }
 
 impl CaveSet {
@@ -128,7 +123,6 @@ impl CaveSet {
             start: false,
             end: false,
             small: 0,
-            large: 0,
         }
     }
     fn insert(&mut self, x: Cave) {
@@ -136,7 +130,6 @@ impl CaveSet {
             Cave::Start => self.start = true,
             Cave::End => self.end = true,
             Cave::Small(i) => self.small |= 1 << i,
-            Cave::Large(i) => self.large |= 1 << i,
         }
     }
 }
@@ -167,7 +160,6 @@ impl<T> Index<Cave> for CaveMap<T> {
             Cave::Start => &self.start,
             Cave::End => &self.end,
             Cave::Small(i) => &self.small[i as usize],
-            Cave::Large(i) => &self.large[i as usize],
         }
     }
 }
@@ -178,7 +170,6 @@ impl<T> IndexMut<Cave> for CaveMap<T> {
             Cave::Start => &mut self.start,
             Cave::End => &mut self.end,
             Cave::Small(i) => &mut self.small[i as usize],
-            Cave::Large(i) => &mut self.large[i as usize],
         }
     }
 }
