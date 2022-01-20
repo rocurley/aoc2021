@@ -1,20 +1,23 @@
 use std::collections::HashMap;
+use std::default::Default;
+use std::ops::{Index, IndexMut};
 use std::time::Instant;
+
 pub fn solve1(input: &[String]) {
     let start = Instant::now();
-    let mut edges = HashMap::new();
+    let mut edges = CaveMap::new();
     let mut parser = CaveParser::new();
     for (x, y) in input.iter().map(|line| line.split_once("-").unwrap()) {
         let x = parser.parse(x);
         let y = parser.parse(y);
-        edges.entry(x).or_insert_with(|| Vec::new()).push(y);
-        edges.entry(y).or_insert_with(|| Vec::new()).push(x);
+        edges[x].get_or_insert_with(|| Vec::new()).push(y);
+        edges[y].get_or_insert_with(|| Vec::new()).push(x);
     }
     let parsing = Instant::now();
     let mut count = 0;
     let mut stack = vec![(Cave::Start, 0)];
     while let Some((head, seen)) = stack.pop() {
-        for &neighbor in &edges[&head] {
+        for &neighbor in edges[head].as_ref().unwrap() {
             if neighbor == Cave::Start {
                 continue;
             }
@@ -112,12 +115,92 @@ impl Cave {
     }
 }
 
-pub fn solve2_inner(edges: &HashMap<Cave, Vec<Cave>>) -> usize {
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub struct CaveSet {
+    start: bool,
+    end: bool,
+    small: u16,
+    large: u16,
+}
+
+impl CaveSet {
+    fn new() -> Self {
+        CaveSet {
+            start: false,
+            end: false,
+            small: 0,
+            large: 0,
+        }
+    }
+    fn insert(&mut self, x: Cave) {
+        match x {
+            Cave::Start => self.start = true,
+            Cave::End => self.end = true,
+            Cave::Small(i) => self.small |= 1 << i,
+            Cave::Large(i) => self.large |= 1 << i,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq)]
+pub struct CaveMap<T> {
+    start: Option<T>,
+    end: Option<T>,
+    small: [Option<T>; 16],
+    large: [Option<T>; 16],
+}
+
+impl<T> CaveMap<T> {
+    pub fn new() -> Self {
+        CaveMap {
+            start: None,
+            end: None,
+            small: Default::default(),
+            large: Default::default(),
+        }
+    }
+}
+
+impl<T> Index<Cave> for CaveMap<T> {
+    type Output = Option<T>;
+    fn index(&self, ix: Cave) -> &Option<T> {
+        match ix {
+            Cave::Start => &self.start,
+            Cave::End => &self.end,
+            Cave::Small(i) => &self.small[i as usize],
+            Cave::Large(i) => &self.large[i as usize],
+        }
+    }
+}
+
+impl<T> IndexMut<Cave> for CaveMap<T> {
+    fn index_mut(&mut self, ix: Cave) -> &mut Option<T> {
+        match ix {
+            Cave::Start => &mut self.start,
+            Cave::End => &mut self.end,
+            Cave::Small(i) => &mut self.small[i as usize],
+            Cave::Large(i) => &mut self.large[i as usize],
+        }
+    }
+}
+
+/*
+fn iter_caves() -> impl Iterator<Item=Cave> {
+}
+*/
+
+pub fn solve2_inner(edges: &CaveMap<Vec<Cave>>) -> usize {
     let mut small_loops: HashMap<u16, usize> = HashMap::new();
-    for (k, onehot) in edges.keys().filter_map(|k| Some((*k, k.small_onehot()?))) {
+    for i in 0..16 {
+        //for (k, onehot) in edges.keys().filter_map(|k| Some((*k, k.small_onehot()?))) {
+        let k = Cave::Small(i);
+        if edges[k].is_none() {
+            continue;
+        }
+        let onehot = 1 << i;
         let mut stack = vec![(k, onehot)];
         while let Some((head, seen)) = stack.pop() {
-            for &neighbor in &edges[&head] {
+            for &neighbor in edges[head].as_ref().unwrap() {
                 if neighbor == Cave::Start {
                     continue;
                 }
@@ -142,7 +225,7 @@ pub fn solve2_inner(edges: &HashMap<Cave, Vec<Cave>>) -> usize {
     let mut count = 0;
     let mut stack = vec![(Cave::Start, 0)];
     while let Some((head, seen)) = stack.pop() {
-        for &neighbor in &edges[&head] {
+        for &neighbor in edges[head].as_ref().unwrap() {
             if neighbor == Cave::Start {
                 continue;
             }
