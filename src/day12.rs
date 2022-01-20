@@ -8,33 +8,7 @@ use std::time::Instant;
 // it possible to slim things down quite a bit.
 pub fn solve1(input: &[String]) {
     let start = Instant::now();
-    let mut big_edges = HashMap::new();
-    let mut parser = CaveParser::new();
-    let mut edges_raw = HashMap::new();
-    for (x, y) in input.iter().map(|line| line.split_once("-").unwrap()) {
-        match (parser.parse(x), parser.parse(y)) {
-            (None, None) => panic!("Cannot connect two big caves"),
-            (Some(x), Some(y)) => {
-                let k = if x < y { (x, y) } else { (y, x) };
-                assert!(edges_raw.insert(k, 1).is_none());
-            }
-            (None, Some(y)) => big_edges.entry(x).or_insert(Vec::new()).push(y),
-            (Some(x), None) => big_edges.entry(y).or_insert(Vec::new()).push(x),
-        }
-    }
-    for small_caves in big_edges.into_values() {
-        for (i, &x) in small_caves.iter().enumerate() {
-            for &y in small_caves[i + 1..].iter() {
-                let k = if x < y { (x, y) } else { (y, x) };
-                *edges_raw.entry(k).or_insert(0) += 1;
-            }
-        }
-    }
-    let mut edges = CaveMap::new();
-    for ((x, y), c) in edges_raw.into_iter() {
-        edges[x].get_or_insert(Vec::new()).push((y, c));
-        edges[y].get_or_insert(Vec::new()).push((x, c));
-    }
+    let edges = parse(input);
     let parsing = Instant::now();
     let mut count = 0;
     let mut stack = vec![Path {
@@ -209,10 +183,41 @@ impl<T> IndexMut<Cave> for CaveMap<T> {
     }
 }
 
-/*
-fn iter_caves() -> impl Iterator<Item=Cave> {
+pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<Vec<(Cave, usize)>> {
+    let mut big_edges = HashMap::new();
+    let mut parser = CaveParser::new();
+    let mut edges_raw = HashMap::new();
+    for (x, y) in input
+        .iter()
+        .map(|line| line.as_ref().split_once("-").unwrap())
+    {
+        match (parser.parse(x), parser.parse(y)) {
+            (None, None) => panic!("Cannot connect two big caves"),
+            (Some(x), Some(y)) => {
+                let k = if x < y { (x, y) } else { (y, x) };
+                assert!(edges_raw.insert(k, 1).is_none());
+            }
+            (None, Some(y)) => big_edges.entry(x).or_insert(Vec::new()).push(y),
+            (Some(x), None) => big_edges.entry(y).or_insert(Vec::new()).push(x),
+        }
+    }
+    for small_caves in big_edges.into_values() {
+        for (i, &x) in small_caves.iter().enumerate() {
+            for &y in small_caves[i..].iter() {
+                let k = if x < y { (x, y) } else { (y, x) };
+                *edges_raw.entry(k).or_insert(0) += 1;
+            }
+        }
+    }
+    let mut edges = CaveMap::new();
+    for ((x, y), c) in edges_raw.into_iter() {
+        edges[x].get_or_insert(Vec::new()).push((y, c));
+        if x != y {
+            edges[y].get_or_insert(Vec::new()).push((x, c));
+        }
+    }
+    edges
 }
-*/
 
 pub fn solve2_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> usize {
     let mut small_loops: HashMap<u16, usize> = HashMap::new();
@@ -255,7 +260,6 @@ pub fn solve2_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> usize {
             }
         }
     }
-    dbg!(&small_loops);
     let mut one_count = 0;
     let mut count = 0;
     let mut stack = vec![Path {
@@ -293,6 +297,5 @@ pub fn solve2_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> usize {
             });
         }
     }
-    dbg!(one_count);
     count
 }

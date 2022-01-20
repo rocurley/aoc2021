@@ -1,4 +1,4 @@
-use aoc2021::day12::{solve2_inner, CaveMap, CaveParser};
+use aoc2021::day12::{parse, solve2_inner};
 use criterion::profiler::Profiler;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use pprof::protos::Message;
@@ -17,14 +17,7 @@ const input: [&'static str; 23] = [
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("solve2", |b| {
         b.iter(|| {
-            let mut edges = CaveMap::new();
-            let mut parser = CaveParser::new();
-            for (x, y) in input.iter().map(|line| line.split_once("-").unwrap()) {
-                let x = parser.parse(x);
-                let y = parser.parse(y);
-                edges[x].get_or_insert_with(|| Vec::new()).push(y);
-                edges[y].get_or_insert_with(|| Vec::new()).push(x);
-            }
+            let edges = parse(&input);
             solve2_inner(&edges)
         })
     });
