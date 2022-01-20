@@ -67,6 +67,7 @@ impl<'a> CaveParser<'a> {
             match self.smalls.iter().position(|x| *x == k) {
                 None => {
                     self.smalls.push(k);
+                    assert!(self.smalls.len() <= 16);
                     Cave::Small(self.smalls.len() as u8 - 1)
                 }
                 Some(i) => Cave::Small(i as u8),
@@ -75,6 +76,7 @@ impl<'a> CaveParser<'a> {
             match self.larges.iter().position(|x| *x == k) {
                 None => {
                     self.larges.push(k);
+                    assert!(self.larges.len() <= 16);
                     Cave::Large(self.larges.len() as u8 - 1)
                 }
                 Some(i) => Cave::Large(i as u8),
@@ -98,10 +100,16 @@ impl Cave {
             _ => false,
         }
     }
+    fn small_onehot(&self) -> Option<u16> {
+        match self {
+            Cave::Small(x) => Some(1 << x),
+            _ => None,
+        }
+    }
 }
 
 pub fn solve2_inner(edges: &HashMap<Cave, Vec<Cave>>) -> usize {
-    let mut small_loops: HashMap<Vec<Cave>, usize> = HashMap::new();
+    let mut small_loops: HashMap<u16, usize> = HashMap::new();
     for &k in edges.keys().filter(|k| k.is_small()) {
         let mut stack = vec![vec![k]];
         while let Some(path) = stack.pop() {
@@ -113,8 +121,11 @@ pub fn solve2_inner(edges: &HashMap<Cave, Vec<Cave>>) -> usize {
                     continue;
                 }
                 if neighbor == k {
-                    let mut ix: Vec<Cave> = path.iter().copied().filter(|x| x.is_small()).collect();
-                    ix.sort();
+                    let ix = path
+                        .iter()
+                        .copied()
+                        .filter_map(|x| x.small_onehot())
+                        .fold(0, |acc, onehot| acc | onehot);
                     *small_loops.entry(ix).or_insert(0) += 1;
                     continue;
                 }
@@ -131,6 +142,11 @@ pub fn solve2_inner(edges: &HashMap<Cave, Vec<Cave>>) -> usize {
     let mut count = 0;
     let mut stack = vec![vec![Cave::Start]];
     while let Some(path) = stack.pop() {
+        let small_mask = path
+            .iter()
+            .copied()
+            .filter_map(|x| x.small_onehot())
+            .fold(0, |acc, onehot| acc | onehot);
         for &neighbor in &edges[path.last().unwrap()] {
             if neighbor == Cave::Start {
                 continue;
@@ -138,7 +154,7 @@ pub fn solve2_inner(edges: &HashMap<Cave, Vec<Cave>>) -> usize {
             if neighbor == Cave::End {
                 count += 1;
                 for (small_loop, loop_count) in small_loops.iter() {
-                    if small_loop.iter().filter(|k| path.contains(k)).count() == 1 {
+                    if (small_loop & small_mask).count_ones() == 1 {
                         count += loop_count;
                     }
                 }
