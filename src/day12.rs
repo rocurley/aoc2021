@@ -23,7 +23,11 @@ pub fn solve1(input: &[String]) {
         }
     }
     dbg!(count);
+    let count = solve2_inner(&edges);
+    dbg!(count);
+}
 
+pub fn solve2_inner<'a>(edges: &'a HashMap<&'a str, Vec<&'a str>>) -> usize {
     let mut small_loops: HashMap<Vec<&str>, usize> = HashMap::new();
     for k in edges
         .keys()
@@ -57,7 +61,6 @@ pub fn solve1(input: &[String]) {
     for (k, v) in small_loops.iter_mut() {
         *v /= k.len();
     }
-    dbg!(&small_loops);
     let mut count = 0;
     let mut stack = vec![vec!["start"]];
     while let Some(path) = stack.pop() {
@@ -83,7 +86,7 @@ pub fn solve1(input: &[String]) {
             stack.push(new_path);
         }
     }
-    dbg!(count);
+    count
 }
 
 fn is_small(k: &str) -> bool {
