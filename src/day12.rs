@@ -4,17 +4,17 @@ use std::ops::{Index, IndexMut};
 use std::time::Instant;
 
 pub fn solve1(input: &[String]) {
-    let start = Instant::now();
-    let edges = parse(input);
+    let start_t = Instant::now();
+    let (start, end, edges) = parse(input);
     let parsing = Instant::now();
-    let (sol1, sol2) = solve_inner(&edges);
+    let (sol1, sol2) = solve_inner(start, end, &edges);
     let solve = Instant::now();
     println!("Part 1: {}", sol1);
     println!("Part 2: {}", sol2);
     let print = Instant::now();
-    println!("Parsing: {:?}", parsing - start);
-    println!("Part 2 solve: {:?}", solve - parsing);
-    println!("Part 2 print: {:?}", print - solve);
+    println!("Parsing: {:?}", parsing - start_t);
+    println!("Solve: {:?}", solve - parsing);
+    println!("Print: {:?}", print - solve);
 }
 
 pub struct Path {
@@ -32,12 +32,6 @@ impl<'a> CaveParser<'a> {
         CaveParser { smalls: Vec::new() }
     }
     pub fn parse(&mut self, k: &'a str) -> Option<Cave> {
-        if k == "start" {
-            return Some(Cave::Start);
-        }
-        if k == "end" {
-            return Some(Cave::End);
-        }
         let is_small = k.chars().next().unwrap().is_lowercase();
         if !is_small {
             return None;
@@ -55,45 +49,28 @@ impl<'a> CaveParser<'a> {
 
 #[derive(PartialEq, Eq, Copy, Clone, Hash, Ord, PartialOrd, Debug)]
 pub enum Cave {
-    Start,
-    End,
     Small(u8),
 }
 
 impl Cave {
-    fn is_small(&self) -> bool {
+    fn small_onehot(&self) -> u16 {
         match self {
-            Cave::Small(_) => true,
-            _ => false,
-        }
-    }
-    fn small_onehot(&self) -> Option<u16> {
-        match self {
-            Cave::Small(x) => Some(1 << x),
-            _ => None,
+            Cave::Small(x) => 1 << x,
         }
     }
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub struct CaveSet {
-    start: bool,
-    end: bool,
     small: u16,
 }
 
 impl CaveSet {
     fn new() -> Self {
-        CaveSet {
-            start: false,
-            end: false,
-            small: 0,
-        }
+        CaveSet { small: 0 }
     }
     fn insert(&mut self, x: Cave) {
         match x {
-            Cave::Start => self.start = true,
-            Cave::End => self.end = true,
             Cave::Small(i) => self.small |= 1 << i,
         }
     }
@@ -101,19 +78,13 @@ impl CaveSet {
 
 #[derive(PartialEq, Eq)]
 pub struct CaveMap<T> {
-    start: Option<T>,
-    end: Option<T>,
     small: [Option<T>; 16],
-    large: [Option<T>; 16],
 }
 
 impl<T> CaveMap<T> {
     pub fn new() -> Self {
         CaveMap {
-            start: None,
-            end: None,
             small: Default::default(),
-            large: Default::default(),
         }
     }
 }
@@ -122,8 +93,6 @@ impl<T> Index<Cave> for CaveMap<T> {
     type Output = Option<T>;
     fn index(&self, ix: Cave) -> &Option<T> {
         match ix {
-            Cave::Start => &self.start,
-            Cave::End => &self.end,
             Cave::Small(i) => &self.small[i as usize],
         }
     }
@@ -132,14 +101,12 @@ impl<T> Index<Cave> for CaveMap<T> {
 impl<T> IndexMut<Cave> for CaveMap<T> {
     fn index_mut(&mut self, ix: Cave) -> &mut Option<T> {
         match ix {
-            Cave::Start => &mut self.start,
-            Cave::End => &mut self.end,
             Cave::Small(i) => &mut self.small[i as usize],
         }
     }
 }
 
-pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<Vec<(Cave, usize)>> {
+pub fn parse<S: AsRef<str>>(input: &[S]) -> (Cave, Cave, CaveMap<Vec<(Cave, usize)>>) {
     let mut big_edges = HashMap::new();
     let mut parser = CaveParser::new();
     let mut edges_raw = HashMap::new();
@@ -172,10 +139,14 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<Vec<(Cave, usize)>> {
             edges[y].get_or_insert(Vec::new()).push((x, c));
         }
     }
-    edges
+    (
+        parser.parse("start").unwrap(),
+        parser.parse("end").unwrap(),
+        edges,
+    )
 }
 
-pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
+pub fn solve_inner(start: Cave, end: Cave, edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
     let mut small_loops: HashMap<u16, usize> = HashMap::new();
     for i in 0..16 {
         let k = Cave::Small(i);
@@ -190,10 +161,10 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
         }];
         while let Some(path) = stack.pop() {
             for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
-                if neighbor == Cave::Start {
+                if neighbor == start {
                     continue;
                 }
-                if neighbor == Cave::End {
+                if neighbor == end {
                     continue;
                 }
                 let weight = path.weight * neighbor_weight;
@@ -202,12 +173,11 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
                     continue;
                 }
                 let mut new_seen = path.seen;
-                if let Some(neighbor_onehot) = neighbor.small_onehot() {
-                    if (path.seen & neighbor_onehot) > 0 || neighbor < k {
-                        continue;
-                    }
-                    new_seen |= neighbor_onehot;
+                let neighbor_onehot = neighbor.small_onehot();
+                if (path.seen & neighbor_onehot) > 0 || neighbor < k {
+                    continue;
                 }
+                new_seen |= neighbor_onehot;
                 stack.push(Path {
                     head: neighbor,
                     seen: new_seen,
@@ -219,17 +189,17 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
     let mut one_count = 0;
     let mut count = 0;
     let mut stack = vec![Path {
-        head: Cave::Start,
+        head: start,
         seen: 0,
         weight: 1,
     }];
     while let Some(path) = stack.pop() {
         for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
-            if neighbor == Cave::Start {
+            if neighbor == start {
                 continue;
             }
             let weight = path.weight * neighbor_weight;
-            if neighbor == Cave::End {
+            if neighbor == end {
                 count += weight;
                 one_count += weight;
                 for (small_loop, loop_count) in small_loops.iter() {
@@ -240,12 +210,11 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
                 continue;
             }
             let mut new_seen = path.seen;
-            if let Some(neighbor_onehot) = neighbor.small_onehot() {
-                if (path.seen & neighbor_onehot) > 0 {
-                    continue;
-                }
-                new_seen |= neighbor_onehot;
+            let neighbor_onehot = neighbor.small_onehot();
+            if (path.seen & neighbor_onehot) > 0 {
+                continue;
             }
+            new_seen |= neighbor_onehot;
             stack.push(Path {
                 head: neighbor,
                 seen: new_seen,
