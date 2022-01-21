@@ -1,4 +1,5 @@
 use aoc2021::day12::{parse, solve_inner};
+use cpuprofiler::PROFILER;
 use criterion::profiler::Profiler;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use pprof::protos::Message;
@@ -7,6 +8,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use std::sync::MutexGuard;
 
 const input: [&'static str; 23] = [
     "yw-MN", "wn-XB", "DG-dc", "MN-wn", "yw-DG", "start-dc", "start-ah", "MN-start", "fi-yw",
@@ -53,5 +55,23 @@ impl<'a> Profiler for CPUProfiler<'a> {
         file.write_all(&content).unwrap();
         let file = File::create(format!("profiling/{}.svg", benchmark_id)).unwrap();
         report.flamegraph(file).unwrap();
+    }
+}
+
+struct CPUProfiler2<'a> {
+    profiler: Option<MutexGuard<'a, cpuprofiler::Profiler>>,
+}
+
+impl<'a> Profiler for CPUProfiler2<'a> {
+    fn start_profiling(&mut self, benchmark_id: &str, benchmark_dir: &Path) {
+        let mut profiler = PROFILER.lock().unwrap();
+        profiler
+            .start(format!("profiling/{}", benchmark_id))
+            .unwrap();
+        self.profiler = Some(profiler);
+    }
+    fn stop_profiling(&mut self, benchmark_id: &str, benchmark_dir: &Path) {
+        let mut p = self.profiler.take().unwrap();
+        p.stop().unwrap();
     }
 }

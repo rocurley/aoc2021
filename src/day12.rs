@@ -60,22 +60,6 @@ impl Cave {
     }
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub struct CaveSet {
-    small: u16,
-}
-
-impl CaveSet {
-    fn new() -> Self {
-        CaveSet { small: 0 }
-    }
-    fn insert(&mut self, x: Cave) {
-        match x {
-            Cave::Small(i) => self.small |= 1 << i,
-        }
-    }
-}
-
 #[derive(PartialEq, Eq)]
 pub struct CaveMap<T> {
     small: [Option<T>; 16],
@@ -148,17 +132,18 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> (Cave, Cave, CaveMap<Vec<(Cave, usiz
 
 pub fn solve_inner(start: Cave, end: Cave, edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
     let mut small_loops: HashMap<u16, usize> = HashMap::new();
+    let mut stack = Vec::new();
     for i in 0..16 {
         let k = Cave::Small(i);
         if edges[k].is_none() {
             continue;
         }
         let onehot = 1 << i;
-        let mut stack = vec![Path {
+        stack.push(Path {
             head: k,
             seen: onehot,
             weight: 1,
-        }];
+        });
         while let Some(path) = stack.pop() {
             for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
                 if neighbor == start {

@@ -50,6 +50,7 @@ dependencies = [
  "argh",
  "cpuprofiler",
  "criterion",
+ "iai",
  "nalgebra",
  "nom",
  "pprof",
@@ -445,6 +446,12 @@ checksum = "c7a30908dbce072eca83216eab939d2290080e00ca71611b96a09e5cdce5f3fa"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "iai"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71a816c97c42258aa5834d07590b718b4c9a598944cd39a52dc25b351185d678"
 
 [[package]]
 name = "indexmap"
