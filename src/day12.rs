@@ -171,13 +171,12 @@ pub fn solve_inner(start: Cave, end: Cave, edges: &CaveMap<Vec<(Cave, usize)>>) 
             }
         }
     }
-    let mut one_count = 0;
-    let mut count = 0;
     let mut stack = vec![Path {
         head: start,
         seen: 0,
         weight: 1,
     }];
+    let mut paths: HashMap<u16, usize> = HashMap::new();
     while let Some(path) = stack.pop() {
         for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
             if neighbor == start {
@@ -185,14 +184,7 @@ pub fn solve_inner(start: Cave, end: Cave, edges: &CaveMap<Vec<(Cave, usize)>>) 
             }
             let weight = path.weight * neighbor_weight;
             if neighbor == end {
-                let mut total_loop_count = 0;
-                for (small_loop, loop_count) in small_loops.iter() {
-                    if (small_loop & path.seen).is_power_of_two() {
-                        total_loop_count += loop_count;
-                    }
-                }
-                count += weight * (1 + total_loop_count);
-                one_count += weight;
+                *paths.entry(path.seen).or_insert(0) += weight;
                 continue;
             }
             let mut new_seen = path.seen;
@@ -207,6 +199,18 @@ pub fn solve_inner(start: Cave, end: Cave, edges: &CaveMap<Vec<(Cave, usize)>>) 
                 weight,
             });
         }
+    }
+    let mut one_count = 0;
+    let mut count = 0;
+    for (path, weight) in paths {
+        let mut total_loop_count = 0;
+        for (small_loop, loop_count) in small_loops.iter() {
+            if (small_loop & path).is_power_of_two() {
+                total_loop_count += loop_count;
+            }
+        }
+        count += weight * (1 + total_loop_count);
+        one_count += weight;
     }
     (one_count, count)
 }
