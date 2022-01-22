@@ -185,13 +185,14 @@ pub fn solve_inner(start: Cave, end: Cave, edges: &CaveMap<Vec<(Cave, usize)>>) 
             }
             let weight = path.weight * neighbor_weight;
             if neighbor == end {
-                count += weight;
-                one_count += weight;
+                let mut total_loop_count = 0;
                 for (small_loop, loop_count) in small_loops.iter() {
-                    if (small_loop & path.seen).count_ones() == 1 {
-                        count += weight * loop_count;
+                    if (small_loop & path.seen).is_power_of_two() {
+                        total_loop_count += loop_count;
                     }
                 }
+                count += weight * (1 + total_loop_count);
+                one_count += weight;
                 continue;
             }
             let mut new_seen = path.seen;
