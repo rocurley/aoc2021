@@ -142,8 +142,6 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<Vec<(Cave, usize)>> {
 }
 
 pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
-    let mut small_loops: HashMap<u16, usize> = HashMap::new();
-    let mut stack = Vec::new();
     let mut caves_count = 16;
     for i in 0..16 {
         let k = Cave(i);
@@ -151,6 +149,11 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
             caves_count = i;
             break;
         }
+    }
+    let mut small_loops: Vec<usize> = vec![0; 1 << caves_count];
+    let mut stack = Vec::new();
+    for i in 0..caves_count {
+        let k = Cave(i);
         let onehot = 1 << i;
         stack.push(Path {
             head: k,
@@ -167,7 +170,7 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
                 }
                 let weight = path.weight * neighbor_weight;
                 if neighbor == k {
-                    *small_loops.entry(path.seen).or_insert(0) += weight;
+                    small_loops[path.seen as usize] += weight;
                     continue;
                 }
                 let mut new_seen = path.seen;
@@ -215,10 +218,13 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
     }
     let mut one_count = 0;
     let mut count = 0;
-    let small_loops_flat: Vec<(u16, usize)> = small_loops.into_iter().collect();
     for (path, weight) in paths {
         let mut total_loop_count = 0;
-        for (small_loop, loop_count) in small_loops_flat.iter() {
+        for (small_loop, &loop_count) in small_loops.iter().enumerate() {
+            let small_loop = small_loop as u16;
+            if loop_count == 0 {
+                continue;
+            }
             if (small_loop & path).is_power_of_two() {
                 total_loop_count += loop_count;
             }
