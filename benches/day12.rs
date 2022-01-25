@@ -19,8 +19,8 @@ const input: [&'static str; 23] = [
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("solve2", |b| {
         b.iter(|| {
-            let (start, end, edges) = parse(&input);
-            solve_inner(start, end, &edges)
+            let edges = parse(&input);
+            solve_inner(&edges)
         })
     });
 }

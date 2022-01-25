@@ -8,8 +8,8 @@ const input: [&'static str; 23] = [
 ];
 
 pub fn benchmark() -> (usize, usize) {
-    let (start, end, edges) = parse(black_box(&input));
-    solve_inner(start, end, &edges)
+    let edges = parse(&input);
+    solve_inner(&edges)
 }
 
 iai::main!(benchmark);
