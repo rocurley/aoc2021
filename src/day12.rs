@@ -215,9 +215,10 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
     }
     let mut one_count = 0;
     let mut count = 0;
+    let small_loops_flat: Vec<(u16, usize)> = small_loops.into_iter().collect();
     for (path, weight) in paths {
         let mut total_loop_count = 0;
-        for (small_loop, loop_count) in small_loops.iter() {
+        for (small_loop, loop_count) in small_loops_flat.iter() {
             if (small_loop & path).is_power_of_two() {
                 total_loop_count += loop_count;
             }
