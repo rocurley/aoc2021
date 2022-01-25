@@ -192,7 +192,7 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
         seen: 0,
         weight: 1,
     }];
-    let mut paths: HashMap<u16, usize> = HashMap::new();
+    let mut paths: Vec<usize> = vec![0; 1 << caves_count];
     while let Some(path) = stack.pop() {
         for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
             if neighbor == START {
@@ -200,7 +200,7 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
             }
             let weight = path.weight * neighbor_weight;
             if neighbor == END {
-                *paths.entry(path.seen).or_insert(0) += weight;
+                paths[path.seen as usize] += weight;
                 continue;
             }
             let mut new_seen = path.seen;
@@ -218,7 +218,11 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
     }
     let mut one_count = 0;
     let mut count = 0;
-    for (path, weight) in paths {
+    for (path, weight) in paths.into_iter().enumerate() {
+        let path = path as u16;
+        if weight == 0 {
+            continue;
+        }
         let mut total_loop_count = 0;
         for (small_loop, &loop_count) in small_loops.iter().enumerate() {
             let small_loop = small_loop as u16;
