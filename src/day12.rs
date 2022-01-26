@@ -1,3 +1,4 @@
+use smallvec::SmallVec;
 use std::default::Default;
 use std::ops::{Index, IndexMut};
 use std::time::Instant;
@@ -6,13 +7,16 @@ pub fn solve1(input: &[String]) {
     let start_t = Instant::now();
     let edges = parse(input);
     let parsing = Instant::now();
-    let (sol1, sol2) = solve_inner(&edges);
+    let (loops_dfs, paths_dfs, (sol1, sol2)) = solve_inner(&edges);
     let solve = Instant::now();
     println!("Part 1: {}", sol1);
     println!("Part 2: {}", sol2);
     let print = Instant::now();
     println!("Parsing: {:?}", parsing - start_t);
-    println!("Solve: {:?}", solve - parsing);
+    println!("Loops DFS: {:?}", loops_dfs - parsing);
+    println!("Paths DFS: {:?}", paths_dfs - loops_dfs);
+    println!("Join: {:?}", solve - paths_dfs);
+    //println!("Solve: {:?}", solve - parsing);
     println!("Print: {:?}", print - solve);
 }
 
@@ -114,7 +118,7 @@ fn alist_get_or_insert<K: Eq, V>(alist: &mut Vec<(K, V)>, target: K, default: V)
     }
 }
 
-pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<Vec<(Cave, usize)>> {
+pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<SmallVec<[(Cave, usize); 8]>> {
     let mut big_edges = Vec::new();
     let mut parser = CaveParser::new();
     let mut edges_raw = Vec::new();
@@ -142,15 +146,17 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<Vec<(Cave, usize)>> {
     }
     let mut edges = CaveMap::new();
     for ((x, y), c) in edges_raw.into_iter() {
-        edges[x].get_or_insert(Vec::new()).push((y, c));
+        edges[x].get_or_insert(SmallVec::new()).push((y, c));
         if x != y {
-            edges[y].get_or_insert(Vec::new()).push((x, c));
+            edges[y].get_or_insert(SmallVec::new()).push((x, c));
         }
     }
     edges
 }
 
-pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
+pub fn solve_inner(
+    edges: &CaveMap<SmallVec<[(Cave, usize); 8]>>,
+) -> (Instant, Instant, (usize, usize)) {
     let mut caves_count = 16;
     for i in 0..16 {
         let k = Cave(i);
@@ -196,6 +202,7 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
             }
         }
     }
+    let loops_dfs = Instant::now();
     let mut stack = vec![Path {
         head: START,
         seen: 0,
@@ -225,6 +232,7 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
             });
         }
     }
+    let paths_dfs = Instant::now();
     let mut one_count = 0;
     let mut count = 0;
     for (path, weight) in paths.into_iter().enumerate() {
@@ -247,5 +255,5 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
         count += weight * (1 + total_loop_count);
         one_count += weight;
     }
-    (one_count, count)
+    (loops_dfs, paths_dfs, (one_count, count))
 }

@@ -16,6 +16,7 @@ nom = "6.0.1"
 recap = "0.1.1"
 serde = "1.0.130"
 nalgebra = "0.29.0"
+smallvec = {vesrion = "1.8.0", features = ["union", "const_generics"]}
 
 [dev-dependencies]
 criterion = "0.3"
