@@ -17,11 +17,16 @@ const input: [&'static str; 23] = [
 ];
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("solve2", |b| {
+    c.bench_function("combined", |b| {
         b.iter(|| {
-            let edges = parse(&input);
+            let edges = parse(black_box(&input));
             solve_inner(&edges)
         })
+    });
+    c.bench_function("parse", |b| b.iter(|| parse(black_box(&input))));
+    c.bench_function("solve", |b| {
+        let edges = parse(&input);
+        b.iter(|| solve_inner(black_box(&edges)))
     });
 }
 

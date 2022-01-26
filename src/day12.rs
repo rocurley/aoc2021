@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::default::Default;
 use std::ops::{Index, IndexMut};
 use std::time::Instant;
@@ -105,10 +104,20 @@ impl<T> IndexMut<Cave> for CaveMap<T> {
     }
 }
 
+fn alist_get_or_insert<K: Eq, V>(alist: &mut Vec<(K, V)>, target: K, default: V) -> &mut V {
+    match alist.iter().position(|(k, _)| *k == target) {
+        Some(i) => &mut alist[i].1,
+        None => {
+            alist.push((target, default));
+            &mut alist.last_mut().unwrap().1
+        }
+    }
+}
+
 pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<Vec<(Cave, usize)>> {
-    let mut big_edges = HashMap::new();
+    let mut big_edges = Vec::new();
     let mut parser = CaveParser::new();
-    let mut edges_raw = HashMap::new();
+    let mut edges_raw = Vec::new();
     for (x, y) in input
         .iter()
         .map(|line| line.as_ref().split_once("-").unwrap())
@@ -117,17 +126,17 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<Vec<(Cave, usize)>> {
             (None, None) => panic!("Cannot connect two big caves"),
             (Some(x), Some(y)) => {
                 let k = if x < y { (x, y) } else { (y, x) };
-                assert!(edges_raw.insert(k, 1).is_none());
+                edges_raw.push((k, 1));
             }
-            (None, Some(y)) => big_edges.entry(x).or_insert(Vec::new()).push(y),
-            (Some(x), None) => big_edges.entry(y).or_insert(Vec::new()).push(x),
+            (None, Some(y)) => alist_get_or_insert(&mut big_edges, x, Vec::new()).push(y),
+            (Some(x), None) => alist_get_or_insert(&mut big_edges, y, Vec::new()).push(x),
         }
     }
-    for small_caves in big_edges.into_values() {
+    for (_, small_caves) in big_edges {
         for (i, &x) in small_caves.iter().enumerate() {
             for &y in small_caves[i..].iter() {
                 let k = if x < y { (x, y) } else { (y, x) };
-                *edges_raw.entry(k).or_insert(0) += 1;
+                *alist_get_or_insert(&mut edges_raw, k, 0) += 1;
             }
         }
     }
