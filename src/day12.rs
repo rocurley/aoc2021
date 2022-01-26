@@ -118,7 +118,7 @@ fn alist_get_or_insert<K: Eq, V>(alist: &mut Vec<(K, V)>, target: K, default: V)
     }
 }
 
-pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<SmallVec<[(Cave, usize); 8]>> {
+pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<SmallVec<[(Cave, usize); 16]>> {
     let mut big_edges = Vec::new();
     let mut parser = CaveParser::new();
     let mut edges_raw = Vec::new();
@@ -155,7 +155,7 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<SmallVec<[(Cave, usize); 8]>
 }
 
 pub fn solve_inner(
-    edges: &CaveMap<SmallVec<[(Cave, usize); 8]>>,
+    edges: &CaveMap<SmallVec<[(Cave, usize); 16]>>,
 ) -> (Instant, Instant, (usize, usize)) {
     let mut caves_count = 16;
     for i in 0..16 {
