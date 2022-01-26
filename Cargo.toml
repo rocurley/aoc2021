@@ -23,6 +23,9 @@ cpuprofiler =  "0.0.4"
 pprof = { version = "0.4", features = ["protobuf", "flamegraph"] }
 iai = "0.1"
 
+[profile.release]
+debug = true
+
 [profile.bench]
 debug = true
 
