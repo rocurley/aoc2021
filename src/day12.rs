@@ -235,9 +235,11 @@ pub fn solve_inner(edges: &CaveMap<Vec<(Cave, usize)>>) -> (usize, usize) {
         let mut total_loop_count = 0;
         for (small_loop, &loop_count) in small_loops.iter().enumerate() {
             let small_loop = small_loop as u16;
+            /*
             if loop_count == 0 {
                 continue;
             }
+            */
             if (small_loop & path).is_power_of_two() {
                 total_loop_count += loop_count;
             }
