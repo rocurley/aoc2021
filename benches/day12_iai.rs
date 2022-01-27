@@ -1,5 +1,6 @@
 use aoc2021::day12::{parse, solve_inner};
 use iai::black_box;
+use std::time::Instant;
 
 const input: [&'static str; 23] = [
     "yw-MN", "wn-XB", "DG-dc", "MN-wn", "yw-DG", "start-dc", "start-ah", "MN-start", "fi-yw",
@@ -7,8 +8,8 @@ const input: [&'static str; 23] = [
     "wn-yw", "dc-ah", "MN-fi", "wn-DG",
 ];
 
-pub fn benchmark() -> (usize, usize) {
-    let edges = parse(&input);
+pub fn benchmark() -> (Instant, Instant, (usize, usize)) {
+    let (edges) = parse(&input);
     solve_inner(&edges)
 }
 
