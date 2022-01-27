@@ -20,9 +20,13 @@ pub fn solve1(input: &[String]) {
     println!("Print: {:?}", print - solve);
 }
 
+type Bitvector = u16;
+const MAX_SMALL: usize = std::mem::size_of::<Bitvector>() * 8;
+const SMALLVEC_LEN: usize = MAX_SMALL + 2;
+
 pub struct Path {
     head: Cave,
-    seen: u16,
+    seen: Bitvector,
     weight: usize,
 }
 
@@ -51,7 +55,7 @@ impl<'a> CaveParser<'a> {
         match self.smalls.iter().position(|x| *x == k) {
             None => {
                 self.smalls.push(k);
-                assert!(self.smalls.len() <= 16);
+                assert!(self.smalls.len() <= MAX_SMALL);
                 Some(Cave(self.smalls.len() as u8 - 1))
             }
             Some(i) => Some(Cave(i as u8)),
@@ -63,7 +67,7 @@ impl<'a> CaveParser<'a> {
 pub struct Cave(u8);
 
 impl Cave {
-    fn small_onehot(&self) -> u16 {
+    fn small_onehot(&self) -> Bitvector {
         match self {
             Cave(x) => 1 << x,
         }
@@ -74,7 +78,7 @@ impl Cave {
 pub struct CaveMap<T> {
     start: Option<T>,
     end: Option<T>,
-    small: [Option<T>; 16],
+    small: [Option<T>; MAX_SMALL],
 }
 
 impl<T> CaveMap<T> {
@@ -118,7 +122,7 @@ fn alist_get_or_insert<K: Eq, V>(alist: &mut Vec<(K, V)>, target: K, default: V)
     }
 }
 
-pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<SmallVec<[(Cave, usize); 16]>> {
+pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<SmallVec<[(Cave, usize); SMALLVEC_LEN]>> {
     let mut big_edges = Vec::new();
     let mut parser = CaveParser::new();
     let mut edges_raw = Vec::new();
@@ -155,10 +159,10 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> CaveMap<SmallVec<[(Cave, usize); 16]
 }
 
 pub fn solve_inner(
-    edges: &CaveMap<SmallVec<[(Cave, usize); 16]>>,
+    edges: &CaveMap<SmallVec<[(Cave, usize); SMALLVEC_LEN]>>,
 ) -> (Instant, Instant, (usize, usize)) {
-    let mut caves_count = 16;
-    for i in 0..16 {
+    let mut caves_count = MAX_SMALL as u8;
+    for i in 0..(MAX_SMALL as u8) {
         let k = Cave(i);
         if edges[k].is_none() {
             caves_count = i;
@@ -236,13 +240,13 @@ pub fn solve_inner(
     let mut one_count = 0;
     let mut count = 0;
     for (path, weight) in paths.into_iter().enumerate() {
-        let path = path as u16;
+        let path = path as Bitvector;
         if weight == 0 {
             continue;
         }
         let mut total_loop_count = 0;
         for (small_loop, &loop_count) in small_loops.iter().enumerate() {
-            let small_loop = small_loop as u16;
+            let small_loop = small_loop as Bitvector;
             /*
             if loop_count == 0 {
                 continue;
