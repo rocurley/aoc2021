@@ -1,4 +1,5 @@
 use smallvec::SmallVec;
+use std::collections::HashMap;
 use std::default::Default;
 use std::ops::{Index, IndexMut};
 use std::time::Instant;
@@ -28,6 +29,12 @@ pub struct Path {
     head: Cave,
     seen: Bitvector,
     weight: usize,
+}
+
+#[derive(PartialEq, Eq, Hash)]
+pub struct PathIndex {
+    head: Cave,
+    seen: Bitvector,
 }
 
 pub struct CaveParser<'a> {
@@ -207,35 +214,46 @@ pub fn solve_inner(
         }
     }
     let loops_dfs = Instant::now();
-    let mut stack = vec![Path {
-        head: START,
-        seen: 0,
-        weight: 1,
-    }];
+    let mut stack = HashMap::new();
+    stack.insert(
+        PathIndex {
+            head: START,
+            seen: 0,
+        },
+        1,
+    );
     let mut paths: Vec<usize> = vec![0; 1 << caves_count];
-    while let Some(path) = stack.pop() {
-        for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
-            if neighbor == START {
-                continue;
+    let mut paths_iterations = 0;
+    while !stack.is_empty() {
+        let mut old_stack = HashMap::new();
+        std::mem::swap(&mut stack, &mut old_stack);
+        for (path_ix, weight) in old_stack {
+            paths_iterations += 1;
+            for &(neighbor, neighbor_weight) in edges[path_ix.head].as_ref().unwrap() {
+                if neighbor == START {
+                    continue;
+                }
+                let weight = weight * neighbor_weight;
+                if neighbor == END {
+                    paths[path_ix.seen as usize] += weight;
+                    continue;
+                }
+                let mut new_seen = path_ix.seen;
+                let neighbor_onehot = neighbor.small_onehot();
+                if (path_ix.seen & neighbor_onehot) > 0 {
+                    continue;
+                }
+                new_seen |= neighbor_onehot;
+                *stack
+                    .entry(PathIndex {
+                        head: neighbor,
+                        seen: new_seen,
+                    })
+                    .or_insert(0) += weight;
             }
-            let weight = path.weight * neighbor_weight;
-            if neighbor == END {
-                paths[path.seen as usize] += weight;
-                continue;
-            }
-            let mut new_seen = path.seen;
-            let neighbor_onehot = neighbor.small_onehot();
-            if (path.seen & neighbor_onehot) > 0 {
-                continue;
-            }
-            new_seen |= neighbor_onehot;
-            stack.push(Path {
-                head: neighbor,
-                seen: new_seen,
-                weight,
-            });
         }
     }
+    dbg!(paths_iterations);
     let paths_dfs = Instant::now();
     let mut one_count = 0;
     let mut count = 0;
@@ -247,11 +265,6 @@ pub fn solve_inner(
         let mut total_loop_count = 0;
         for (small_loop, &loop_count) in small_loops.iter().enumerate() {
             let small_loop = small_loop as Bitvector;
-            /*
-            if loop_count == 0 {
-                continue;
-            }
-            */
             if (small_loop & path).is_power_of_two() {
                 total_loop_count += loop_count;
             }
