@@ -81,7 +81,7 @@ impl Cave {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct CaveMap<T> {
     start: Option<T>,
     end: Option<T>,
@@ -95,6 +95,9 @@ impl<T> CaveMap<T> {
             end: None,
             small: Default::default(),
         }
+    }
+    pub fn non_end_empty(&self) -> bool {
+        self.start.is_none() && self.small.iter().all(|x| x.is_none())
     }
 }
 
@@ -214,46 +217,55 @@ pub fn solve_inner(
         }
     }
     let loops_dfs = Instant::now();
-    let mut stack = HashMap::new();
-    stack.insert(
-        PathIndex {
-            head: START,
-            seen: 0,
-        },
-        1,
-    );
-    let mut paths: Vec<usize> = vec![0; 1 << caves_count];
-    let mut paths_iterations = 0;
-    while !stack.is_empty() {
-        let mut old_stack = HashMap::new();
+    let mut stack = CaveMap::new();
+    let mut start_vec = vec![0; 1 << caves_count];
+    start_vec[0] = 1;
+    stack[START] = Some(start_vec);
+
+    let mut relevant_caves: Vec<Cave> = (0..caves_count).map(|i| Cave(i)).collect();
+    relevant_caves.push(START);
+    while !stack.non_end_empty() {
+        let mut old_stack = CaveMap::new();
         std::mem::swap(&mut stack, &mut old_stack);
-        for (path_ix, weight) in old_stack {
-            paths_iterations += 1;
-            for &(neighbor, neighbor_weight) in edges[path_ix.head].as_ref().unwrap() {
+        stack[END] = old_stack[END].take();
+        for &head in relevant_caves.iter() {
+            let seen_weights = if let Some(sw) = old_stack[head].take() {
+                sw
+            } else {
+                continue;
+            };
+            for &(neighbor, neighbor_weight) in edges[head].as_ref().unwrap() {
                 if neighbor == START {
                     continue;
                 }
-                let weight = weight * neighbor_weight;
-                if neighbor == END {
-                    paths[path_ix.seen as usize] += weight;
-                    continue;
+                let neighbor_onehot = if neighbor == END {
+                    0
+                } else {
+                    neighbor.small_onehot() as usize
+                };
+                let (target, mut target_empty) = match &mut stack[neighbor] {
+                    Some(t) => (t, false),
+                    None => {
+                        stack[neighbor] = Some(vec![0; 1 << caves_count]);
+                        (stack[neighbor].as_mut().unwrap(), true)
+                    }
+                };
+                for (seen, &weight) in seen_weights.iter().enumerate() {
+                    if (seen & neighbor_onehot) > 0 {
+                        continue;
+                    }
+                    target_empty &= weight == 0;
+                    let new_seen = seen | neighbor_onehot;
+                    let new_weight = weight * neighbor_weight;
+                    target[new_seen] += new_weight;
                 }
-                let mut new_seen = path_ix.seen;
-                let neighbor_onehot = neighbor.small_onehot();
-                if (path_ix.seen & neighbor_onehot) > 0 {
-                    continue;
+                if target_empty {
+                    stack[neighbor] = None;
                 }
-                new_seen |= neighbor_onehot;
-                *stack
-                    .entry(PathIndex {
-                        head: neighbor,
-                        seen: new_seen,
-                    })
-                    .or_insert(0) += weight;
             }
         }
     }
-    dbg!(paths_iterations);
+    let paths = stack[END].take().unwrap();
     let paths_dfs = Instant::now();
     let mut one_count = 0;
     let mut count = 0;
