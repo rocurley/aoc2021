@@ -1,4 +1,4 @@
-use aoc2021::day12::{parse, solve_inner};
+use aoc2021::day12::{find_paths, find_paths_ref, parse, solve_inner};
 use cpuprofiler::PROFILER;
 use criterion::profiler::Profiler;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
@@ -19,14 +19,22 @@ const input: [&'static str; 23] = [
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("combined", |b| {
         b.iter(|| {
-            let edges = parse(black_box(&input));
-            solve_inner(&edges)
+            let (edges, count) = parse(black_box(&input));
+            solve_inner(&edges, count)
         })
     });
     c.bench_function("parse", |b| b.iter(|| parse(black_box(&input))));
     c.bench_function("solve", |b| {
-        let edges = parse(&input);
-        b.iter(|| solve_inner(black_box(&edges)))
+        let (edges, count) = parse(&input);
+        b.iter(|| solve_inner(black_box(&edges), black_box(count)))
+    });
+    c.bench_function("find_paths", |b| {
+        let (edges, count) = parse(&input);
+        b.iter(|| find_paths(black_box(&edges), black_box(count)))
+    });
+    c.bench_function("find_paths_ref", |b| {
+        let (edges, count) = parse(&input);
+        b.iter(|| find_paths_ref(black_box(&edges), black_box(count)))
     });
 }
 
