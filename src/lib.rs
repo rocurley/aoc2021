@@ -1,3 +1,4 @@
+#![feature(portable_simd)]
 extern crate recap;
 extern crate serde;
 pub mod day1;
