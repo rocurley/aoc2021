@@ -33,7 +33,7 @@ const WEIGHTS_LANE_WIDTH: usize = std::mem::size_of::<WeightsVec>() / WEIGHTS_LA
 pub struct Path {
     head: Cave,
     seen: Bitvector,
-    weight: usize,
+    weight: u32,
 }
 
 #[derive(PartialEq, Eq, Hash)]
@@ -137,7 +137,7 @@ fn alist_get_or_insert<K: Eq, V>(alist: &mut Vec<(K, V)>, target: K, default: V)
     }
 }
 
-type Edges = CaveMap<SmallVec<[(Cave, usize); SMALLVEC_LEN]>>;
+type Edges = CaveMap<SmallVec<[(Cave, u32); SMALLVEC_LEN]>>;
 
 pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
     let mut big_edges = Vec::new();
@@ -200,7 +200,7 @@ pub fn solve_inner(edges: &Edges) -> (Instant, Instant, (usize, usize)) {
             for (small_loop, &loop_count) in small_loops.iter().enumerate() {
                 let small_loop = small_loop as Bitvector;
                 if (small_loop & path).is_power_of_two() {
-                    total_loop_count += loop_count;
+                    total_loop_count += loop_count as usize;
                 }
             }
             count += weight as usize * (1 + total_loop_count);
@@ -210,8 +210,8 @@ pub fn solve_inner(edges: &Edges) -> (Instant, Instant, (usize, usize)) {
     (loops_dfs, paths_dfs, (one_count as usize, count))
 }
 
-fn find_loops(caves_count: u8, edges: &Edges) -> Vec<usize> {
-    let mut small_loops: Vec<usize> = vec![0; 1 << caves_count];
+fn find_loops(caves_count: u8, edges: &Edges) -> Vec<u32> {
+    let mut small_loops: Vec<u32> = vec![0; 1 << caves_count];
     let mut stack = Vec::new();
     for i in 0..caves_count {
         let k = Cave(i);
@@ -345,7 +345,7 @@ fn find_paths(caves_count: u8, edges: &Edges) -> Vec<WeightsVec> {
     stack[END].take().unwrap()
 }
 
-fn subvector_bfs_step<const shift: usize>(
+fn subvector_bfs_step<const SHIFT: usize>(
     neighbor_weight: u32,
     seen_weights: &[WeightsVec],
     target: &mut [WeightsVec],
@@ -353,17 +353,18 @@ fn subvector_bfs_step<const shift: usize>(
 ) {
     let mut neighbor_weight_mask = WeightsVec::splat(neighbor_weight as u32);
     for i in 0..WEIGHTS_LANES {
-        if (i / shift) % 2 == 1 {
+        if (i / SHIFT) % 2 == 1 {
             neighbor_weight_mask[i] = 0;
         }
     }
     for (weight, target_weight) in seen_weights.iter().zip(target.iter_mut()) {
-        let masked_weight = (weight * neighbor_weight_mask).rotate_lanes_right::<shift>();
+        let masked_weight = (weight * neighbor_weight_mask).rotate_lanes_right::<SHIFT>();
         *target_weight += masked_weight;
         *target_empty &= masked_weight.lanes_eq(WeightsVec::splat(0));
     }
 }
 
+#[cfg(test)]
 fn find_paths_ref(caves_count: u8, edges: &Edges) -> Vec<u32> {
     let mut stack = vec![Path {
         head: START,
