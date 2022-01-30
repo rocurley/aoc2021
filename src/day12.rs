@@ -292,60 +292,36 @@ fn find_paths(caves_count: u8, edges: &Edges) -> Vec<WeightsVec> {
                 let shift = neighbor.small_onehot() as usize;
                 match shift {
                     1 => {
-                        let mut neighbor_weight_mask = WeightsVec::splat(neighbor_weight as u32);
-                        for i in 0..WEIGHTS_LANES {
-                            if (i / shift) % 2 == 1 {
-                                neighbor_weight_mask[i] = 0;
-                            }
-                        }
-                        for (weight, target_weight) in seen_weights.iter().zip(target.iter_mut()) {
-                            let masked_weight =
-                                (weight * neighbor_weight_mask).rotate_lanes_right::<1>();
-                            *target_weight += masked_weight;
-                            target_empty &= masked_weight.lanes_eq(WeightsVec::splat(0));
-                        }
+                        subvector_bfs_step::<1>(
+                            neighbor_weight as u32,
+                            &seen_weights,
+                            target,
+                            &mut target_empty,
+                        );
                     }
                     2 => {
-                        let mut neighbor_weight_mask = WeightsVec::splat(neighbor_weight as u32);
-                        for i in 0..WEIGHTS_LANES {
-                            if (i / shift) % 2 == 1 {
-                                neighbor_weight_mask[i] = 0;
-                            }
-                        }
-                        for (weight, target_weight) in seen_weights.iter().zip(target.iter_mut()) {
-                            let masked_weight =
-                                (weight * neighbor_weight_mask).rotate_lanes_right::<2>();
-                            *target_weight += masked_weight;
-                            target_empty &= masked_weight.lanes_eq(WeightsVec::splat(0));
-                        }
+                        subvector_bfs_step::<2>(
+                            neighbor_weight as u32,
+                            &seen_weights,
+                            target,
+                            &mut target_empty,
+                        );
                     }
                     4 => {
-                        let mut neighbor_weight_mask = WeightsVec::splat(neighbor_weight as u32);
-                        for i in 0..WEIGHTS_LANES {
-                            if (i / shift) % 2 == 1 {
-                                neighbor_weight_mask[i] = 0;
-                            }
-                        }
-                        for (weight, target_weight) in seen_weights.iter().zip(target.iter_mut()) {
-                            let masked_weight =
-                                (weight * neighbor_weight_mask).rotate_lanes_right::<4>();
-                            *target_weight += masked_weight;
-                            target_empty &= masked_weight.lanes_eq(WeightsVec::splat(0));
-                        }
+                        subvector_bfs_step::<4>(
+                            neighbor_weight as u32,
+                            &seen_weights,
+                            target,
+                            &mut target_empty,
+                        );
                     }
                     8 => {
-                        let mut neighbor_weight_mask = WeightsVec::splat(neighbor_weight as u32);
-                        for i in 0..WEIGHTS_LANES {
-                            if (i / shift) % 2 == 1 {
-                                neighbor_weight_mask[i] = 0;
-                            }
-                        }
-                        for (weight, target_weight) in seen_weights.iter().zip(target.iter_mut()) {
-                            let masked_weight =
-                                (weight * neighbor_weight_mask).rotate_lanes_right::<8>();
-                            *target_weight += masked_weight;
-                            target_empty &= masked_weight.lanes_eq(WeightsVec::splat(0));
-                        }
+                        subvector_bfs_step::<8>(
+                            neighbor_weight as u32,
+                            &seen_weights,
+                            target,
+                            &mut target_empty,
+                        );
                     }
                     _ => {
                         assert!(shift >= WEIGHTS_LANES);
@@ -367,6 +343,25 @@ fn find_paths(caves_count: u8, edges: &Edges) -> Vec<WeightsVec> {
         }
     }
     stack[END].take().unwrap()
+}
+
+fn subvector_bfs_step<const shift: usize>(
+    neighbor_weight: u32,
+    seen_weights: &[WeightsVec],
+    target: &mut [WeightsVec],
+    target_empty: &mut WeightsMask,
+) {
+    let mut neighbor_weight_mask = WeightsVec::splat(neighbor_weight as u32);
+    for i in 0..WEIGHTS_LANES {
+        if (i / shift) % 2 == 1 {
+            neighbor_weight_mask[i] = 0;
+        }
+    }
+    for (weight, target_weight) in seen_weights.iter().zip(target.iter_mut()) {
+        let masked_weight = (weight * neighbor_weight_mask).rotate_lanes_right::<shift>();
+        *target_weight += masked_weight;
+        *target_empty &= masked_weight.lanes_eq(WeightsVec::splat(0));
+    }
 }
 
 fn find_paths_ref(caves_count: u8, edges: &Edges) -> Vec<u32> {
