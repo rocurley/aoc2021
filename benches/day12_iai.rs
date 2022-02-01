@@ -9,7 +9,7 @@ const input: [&'static str; 23] = [
 ];
 
 pub fn benchmark() -> (Instant, Instant, (usize, usize)) {
-    let (edges) = parse(&input);
+    let edges = parse(&input);
     solve_inner(&edges)
 }
 

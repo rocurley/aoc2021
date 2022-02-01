@@ -4,7 +4,6 @@ use criterion::profiler::Profiler;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use pprof::protos::Message;
 use pprof::ProfilerGuard;
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -19,22 +18,22 @@ const input: [&'static str; 23] = [
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("combined", |b| {
         b.iter(|| {
-            let (edges, count) = parse(black_box(&input));
-            solve_inner(&edges, count)
+            let edges = parse(black_box(&input));
+            solve_inner(&edges)
         })
     });
     c.bench_function("parse", |b| b.iter(|| parse(black_box(&input))));
     c.bench_function("solve", |b| {
-        let (edges, count) = parse(&input);
-        b.iter(|| solve_inner(black_box(&edges), black_box(count)))
+        let edges = parse(&input);
+        b.iter(|| solve_inner(black_box(&edges)))
     });
     c.bench_function("find_paths", |b| {
-        let (edges, count) = parse(&input);
-        b.iter(|| find_paths(black_box(&edges), black_box(count)))
+        let edges = parse(&input);
+        b.iter(|| find_paths(black_box(&edges)))
     });
     c.bench_function("find_paths_ref", |b| {
-        let (edges, count) = parse(&input);
-        b.iter(|| find_paths_ref(black_box(&edges), black_box(count)))
+        let edges = parse(&input);
+        b.iter(|| find_paths_ref(black_box(&edges)))
     });
 }
 

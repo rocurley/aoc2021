@@ -5,9 +5,9 @@ use std::time::Instant;
 
 pub fn solve1(input: &[String]) {
     let start_t = Instant::now();
-    let (edges, caves_count) = parse(input);
+    let edges = parse(input);
     let parsing = Instant::now();
-    let (loops_dfs, paths_dfs, (sol1, sol2)) = solve_inner(&edges, caves_count);
+    let (loops_dfs, paths_dfs, (sol1, sol2)) = solve_inner(&edges);
     let solve = Instant::now();
     println!("Part 1: {}", sol1);
     println!("Part 2: {}", sol2);
@@ -103,7 +103,10 @@ impl<T: Clone> CaveMap<T> {
     }
 }
 
-impl<T: Clone> CaveMap<T> {
+impl<T> CaveMap<T> {
+    fn count(&self) -> u8 {
+        self.small.len() as u8
+    }
     fn keys(&self) -> Vec<Cave> {
         let mut out: Vec<Cave> = (0..self.small.len()).map(|i| Cave(i as u8)).collect();
         out.push(START);
@@ -145,7 +148,7 @@ fn alist_get_or_insert<K: Eq, V>(alist: &mut Vec<(K, V)>, target: K, default: V)
 
 type Edges = CaveMap<SmallVec<[(Cave, u32); SMALLVEC_LEN]>>;
 
-pub fn parse<S: AsRef<str>>(input: &[S]) -> (Edges, u8) {
+pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
     let mut big_edges = Vec::new();
     let mut parser = CaveParser::new();
     let mut edges_raw = Vec::new();
@@ -179,13 +182,13 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> (Edges, u8) {
             edges[y].push((x, c));
         }
     }
-    (edges, n_small_caves)
+    edges
 }
 
-pub fn solve_inner(edges: &Edges, caves_count: u8) -> (Instant, Instant, (usize, usize)) {
-    let small_loops = find_loops(edges, caves_count);
+pub fn solve_inner(edges: &Edges) -> (Instant, Instant, (usize, usize)) {
+    let small_loops = find_loops(edges);
     let loops_dfs = Instant::now();
-    let paths = find_paths(edges, caves_count);
+    let paths = find_paths(edges);
     let paths_dfs = Instant::now();
     let mut one_count = 0;
     let mut count = 0;
@@ -209,10 +212,10 @@ pub fn solve_inner(edges: &Edges, caves_count: u8) -> (Instant, Instant, (usize,
     (loops_dfs, paths_dfs, (one_count as usize, count))
 }
 
-fn find_loops(edges: &Edges, caves_count: u8) -> Vec<u32> {
-    let mut small_loops: Vec<u32> = vec![0; 1 << caves_count];
+fn find_loops(edges: &Edges) -> Vec<u32> {
+    let mut small_loops: Vec<u32> = vec![0; 1 << edges.count()];
     let mut stack = Vec::new();
-    for i in 0..caves_count {
+    for i in 0..edges.count() {
         let k = Cave(i);
         let onehot = 1 << i;
         stack.push(Path {
@@ -250,21 +253,21 @@ fn find_loops(edges: &Edges, caves_count: u8) -> Vec<u32> {
     small_loops
 }
 
-pub fn find_paths(edges: &Edges, caves_count: u8) -> Vec<WeightsVec> {
-    assert!((1 << caves_count) >= WEIGHTS_LANES);
-    let n_vectors = (1 << caves_count) / WEIGHTS_LANES;
+pub fn find_paths(edges: &Edges) -> Vec<WeightsVec> {
+    assert!((1 << edges.count()) >= WEIGHTS_LANES);
+    let n_vectors = (1 << edges.count()) / WEIGHTS_LANES;
     let mut stack = CaveMap::new_cloned(
         ZeroTagVec {
             is_zero: true,
             vals: vec![WeightsVec::splat(0); n_vectors],
         },
-        caves_count,
+        edges.count(),
     );
     let start_vec = &mut stack[START];
     start_vec.vals[0][0] = 1;
     start_vec.is_zero = false;
 
-    let mut relevant_caves: Vec<Cave> = (0..caves_count).map(|i| Cave(i)).collect();
+    let mut relevant_caves: Vec<Cave> = (0..edges.count()).map(|i| Cave(i)).collect();
     relevant_caves.push(START);
     // Arbitrary: just has to be filled with something of the correct length.
     let mut seen_weights = vec![WeightsVec::splat(0); n_vectors];
@@ -358,13 +361,13 @@ fn subvector_bfs_step<const SHIFT: usize>(
     }
 }
 
-pub fn find_paths_ref(edges: &Edges, caves_count: u8) -> Vec<u32> {
+pub fn find_paths_ref(edges: &Edges) -> Vec<u32> {
     let mut stack = vec![Path {
         head: START,
         seen: 0,
         weight: 1,
     }];
-    let mut paths: Vec<u32> = vec![0; 1 << caves_count];
+    let mut paths: Vec<u32> = vec![0; 1 << edges.count()];
     while let Some(path) = stack.pop() {
         for &(neighbor, neighbor_weight) in &edges[path.head] {
             if neighbor == START {
@@ -426,11 +429,11 @@ mod test {
 
     #[test]
     fn test_find_paths() {
-        let (edges, caves_count) = super::parse(&INPUT);
+        let edges = super::parse(&INPUT);
         super::edges_to_dot(&edges);
-        let expected = super::find_paths_ref(&edges, caves_count);
+        let expected = super::find_paths_ref(&edges);
         //assert_ne!(0u32, expected.into_iter().sum());
-        let actual = super::find_paths(&edges, caves_count);
+        let actual = super::find_paths(&edges);
         let actual_flattened: Vec<u32> = actual
             .into_iter()
             .flat_map(super::WeightsVec::to_array)
