@@ -1,5 +1,4 @@
 use smallvec::SmallVec;
-use std::default::Default;
 use std::ops::{Index, IndexMut};
 use std::simd::{mask32x16, u32x16};
 use std::time::Instant;
@@ -88,27 +87,34 @@ impl Cave {
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct CaveMap<T> {
-    start: Option<T>,
-    end: Option<T>,
-    small: [Option<T>; MAX_SMALL],
+    start: T,
+    end: T,
+    small: SmallVec<[T; MAX_SMALL]>,
 }
 
-impl<T> CaveMap<T> {
-    pub fn new() -> Self {
+impl<T: Clone> CaveMap<T> {
+    fn new_cloned(init: T, n_caves: u8) -> Self {
+        let small = vec![init.clone(); n_caves as usize].into();
         CaveMap {
-            start: None,
-            end: None,
-            small: Default::default(),
+            start: init.clone(),
+            end: init,
+            small,
         }
     }
-    pub fn non_end_empty(&self) -> bool {
-        self.start.is_none() && self.small.iter().all(|x| x.is_none())
+}
+
+impl<T: Clone> CaveMap<T> {
+    fn keys(&self) -> Vec<Cave> {
+        let mut out: Vec<Cave> = (0..self.small.len()).map(|i| Cave(i as u8)).collect();
+        out.push(START);
+        out.push(END);
+        out
     }
 }
 
 impl<T> Index<Cave> for CaveMap<T> {
-    type Output = Option<T>;
-    fn index(&self, ix: Cave) -> &Option<T> {
+    type Output = T;
+    fn index(&self, ix: Cave) -> &T {
         match ix {
             x if x == START => &self.start,
             x if x == END => &self.end,
@@ -118,7 +124,7 @@ impl<T> Index<Cave> for CaveMap<T> {
 }
 
 impl<T> IndexMut<Cave> for CaveMap<T> {
-    fn index_mut(&mut self, ix: Cave) -> &mut Option<T> {
+    fn index_mut(&mut self, ix: Cave) -> &mut T {
         match ix {
             x if x == START => &mut self.start,
             x if x == END => &mut self.end,
@@ -165,14 +171,15 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> (Edges, u8) {
             }
         }
     }
-    let mut edges = CaveMap::new();
+    let n_small_caves = parser.smalls.len() as u8;
+    let mut edges = CaveMap::new_cloned(SmallVec::new(), n_small_caves);
     for ((x, y), c) in edges_raw.into_iter() {
-        edges[x].get_or_insert(SmallVec::new()).push((y, c));
+        edges[x].push((y, c));
         if x != y {
-            edges[y].get_or_insert(SmallVec::new()).push((x, c));
+            edges[y].push((x, c));
         }
     }
-    (edges, parser.smalls.len() as u8)
+    (edges, n_small_caves)
 }
 
 pub fn solve_inner(edges: &Edges, caves_count: u8) -> (Instant, Instant, (usize, usize)) {
@@ -214,7 +221,7 @@ fn find_loops(edges: &Edges, caves_count: u8) -> Vec<u32> {
             weight: 1,
         });
         while let Some(path) = stack.pop() {
-            for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
+            for &(neighbor, neighbor_weight) in &edges[path.head] {
                 if neighbor == START {
                     continue;
                 }
@@ -245,24 +252,17 @@ fn find_loops(edges: &Edges, caves_count: u8) -> Vec<u32> {
 
 pub fn find_paths(edges: &Edges, caves_count: u8) -> Vec<WeightsVec> {
     assert!((1 << caves_count) >= WEIGHTS_LANES);
-    let mut stack = CaveMap::new();
     let n_vectors = (1 << caves_count) / WEIGHTS_LANES;
-    let mut start_vec = vec![WeightsVec::splat(0); n_vectors];
-    start_vec[0][0] = 1;
-    stack[START] = Some(ZeroTagVec {
-        is_zero: false,
-        vals: start_vec,
-    });
-    for i in 0..caves_count {
-        stack[Cave(i)] = Some(ZeroTagVec {
+    let mut stack = CaveMap::new_cloned(
+        ZeroTagVec {
             is_zero: true,
             vals: vec![WeightsVec::splat(0); n_vectors],
-        });
-    }
-    stack[END] = Some(ZeroTagVec {
-        is_zero: true,
-        vals: vec![WeightsVec::splat(0); n_vectors],
-    });
+        },
+        caves_count,
+    );
+    let start_vec = &mut stack[START];
+    start_vec.vals[0][0] = 1;
+    start_vec.is_zero = false;
 
     let mut relevant_caves: Vec<Cave> = (0..caves_count).map(|i| Cave(i)).collect();
     relevant_caves.push(START);
@@ -272,7 +272,7 @@ pub fn find_paths(edges: &Edges, caves_count: u8) -> Vec<WeightsVec> {
     while continue_loop {
         continue_loop = false;
         for &head in relevant_caves.iter() {
-            let seen_weights_ref = stack[head].as_mut().unwrap();
+            let seen_weights_ref = &mut stack[head];
             if seen_weights_ref.is_zero {
                 continue;
             }
@@ -280,17 +280,17 @@ pub fn find_paths(edges: &Edges, caves_count: u8) -> Vec<WeightsVec> {
             std::mem::swap(&mut seen_weights, &mut seen_weights_ref.vals);
             seen_weights_ref.is_zero = true;
             seen_weights_ref.vals.fill(WeightsVec::splat(0));
-            for &(neighbor, neighbor_weight) in edges[head].as_ref().unwrap() {
+            for &(neighbor, neighbor_weight) in &edges[head] {
                 if neighbor == START {
                     continue;
                 }
                 if neighbor == head {
                     continue;
                 }
-                let target_tagged = stack[neighbor].as_mut().unwrap();
+                let target_tagged = &mut stack[neighbor];
                 let target = &mut target_tagged.vals;
                 if neighbor == END {
-                    let neighbor_weight = WeightsVec::splat(neighbor_weight as u32);
+                    let neighbor_weight = WeightsVec::splat(neighbor_weight);
                     for (weight, target_weight) in seen_weights.iter().zip(target.iter_mut()) {
                         *target_weight += neighbor_weight * weight;
                     }
@@ -299,20 +299,20 @@ pub fn find_paths(edges: &Edges, caves_count: u8) -> Vec<WeightsVec> {
                 let shift = neighbor.small_onehot() as usize;
                 match shift {
                     1 => {
-                        subvector_bfs_step::<1>(neighbor_weight as u32, &seen_weights, target);
+                        subvector_bfs_step::<1>(neighbor_weight, &seen_weights, target);
                     }
                     2 => {
-                        subvector_bfs_step::<2>(neighbor_weight as u32, &seen_weights, target);
+                        subvector_bfs_step::<2>(neighbor_weight, &seen_weights, target);
                     }
                     4 => {
-                        subvector_bfs_step::<4>(neighbor_weight as u32, &seen_weights, target);
+                        subvector_bfs_step::<4>(neighbor_weight, &seen_weights, target);
                     }
                     8 => {
-                        subvector_bfs_step::<8>(neighbor_weight as u32, &seen_weights, target);
+                        subvector_bfs_step::<8>(neighbor_weight, &seen_weights, target);
                     }
                     _ => {
                         assert!(shift >= WEIGHTS_LANES);
-                        let neighbor_weight = WeightsVec::splat(neighbor_weight as u32);
+                        let neighbor_weight = WeightsVec::splat(neighbor_weight);
                         let shift_vecs = shift / WEIGHTS_LANES;
                         for (seen, &weight) in seen_weights.iter().enumerate() {
                             if (seen / shift_vecs) % 2 == 1 {
@@ -332,9 +332,10 @@ pub fn find_paths(edges: &Edges, caves_count: u8) -> Vec<WeightsVec> {
             }
         }
     }
-    stack[END].take().unwrap().vals
+    std::mem::replace(&mut stack[END].vals, Vec::new())
 }
 
+#[derive(PartialEq, Eq, Debug, Clone)]
 struct ZeroTagVec {
     is_zero: bool,
     vals: Vec<WeightsVec>,
@@ -365,7 +366,7 @@ pub fn find_paths_ref(edges: &Edges, caves_count: u8) -> Vec<u32> {
     }];
     let mut paths: Vec<u32> = vec![0; 1 << caves_count];
     while let Some(path) = stack.pop() {
-        for &(neighbor, neighbor_weight) in edges[path.head].as_ref().unwrap() {
+        for &(neighbor, neighbor_weight) in &edges[path.head] {
             if neighbor == START {
                 continue;
             }
@@ -406,15 +407,10 @@ fn edges_to_dot(edges: &Edges) {
     println!("splines=true;");
     println!("sep=\"+25,25\";");
     println!("overlap=scalexy;");
-    let mut relevant_caves: Vec<Cave> = (0..MAX_SMALL as u8).map(|i| Cave(i)).collect();
-    relevant_caves.push(START);
-    relevant_caves.push(END);
-    for head in relevant_caves {
-        if let Some(head_edges) = edges[head].as_ref() {
-            for &(tail, weight) in head_edges {
-                if head >= tail {
-                    println!("{}--{} [label={}]", cave_str(head), cave_str(tail), weight);
-                }
+    for head in edges.keys() {
+        for &(tail, weight) in &edges[head] {
+            if head >= tail {
+                println!("{}--{} [label={}]", cave_str(head), cave_str(tail), weight);
             }
         }
     }
