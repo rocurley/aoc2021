@@ -249,17 +249,37 @@ pub fn find_paths(edges: &Edges, caves_count: u8) -> Vec<WeightsVec> {
     let n_vectors = (1 << caves_count) / WEIGHTS_LANES;
     let mut start_vec = vec![WeightsVec::splat(0); n_vectors];
     start_vec[0][0] = 1;
-    stack[START] = Some(start_vec);
+    stack[START] = Some(ZeroTagVec {
+        is_zero: false,
+        vals: start_vec,
+    });
+    for i in 0..caves_count {
+        stack[Cave(i)] = Some(ZeroTagVec {
+            is_zero: true,
+            vals: vec![WeightsVec::splat(0); n_vectors],
+        });
+    }
+    stack[END] = Some(ZeroTagVec {
+        is_zero: true,
+        vals: vec![WeightsVec::splat(0); n_vectors],
+    });
 
     let mut relevant_caves: Vec<Cave> = (0..caves_count).map(|i| Cave(i)).collect();
     relevant_caves.push(START);
-    while !stack.non_end_empty() {
+    // Arbitrary: just has to be filled with something of the correct length.
+    let mut seen_weights = vec![WeightsVec::splat(0); n_vectors];
+    let mut continue_loop = true;
+    while continue_loop {
+        continue_loop = false;
         for &head in relevant_caves.iter() {
-            let seen_weights = if let Some(sw) = stack[head].take() {
-                sw
-            } else {
+            let seen_weights_ref = stack[head].as_mut().unwrap();
+            if seen_weights_ref.is_zero {
                 continue;
-            };
+            }
+            continue_loop = true;
+            std::mem::swap(&mut seen_weights, &mut seen_weights_ref.vals);
+            seen_weights_ref.is_zero = true;
+            seen_weights_ref.vals.fill(WeightsVec::splat(0));
             for &(neighbor, neighbor_weight) in edges[head].as_ref().unwrap() {
                 if neighbor == START {
                     continue;
@@ -267,9 +287,8 @@ pub fn find_paths(edges: &Edges, caves_count: u8) -> Vec<WeightsVec> {
                 if neighbor == head {
                     continue;
                 }
-                let target_maybe_empty = stack[neighbor].is_none();
-                let target =
-                    stack[neighbor].get_or_insert_with(|| vec![WeightsVec::splat(0); n_vectors]);
+                let target_tagged = stack[neighbor].as_mut().unwrap();
+                let target = &mut target_tagged.vals;
                 if neighbor == END {
                     let neighbor_weight = WeightsVec::splat(neighbor_weight as u32);
                     for (weight, target_weight) in seen_weights.iter().zip(target.iter_mut()) {
@@ -303,19 +322,22 @@ pub fn find_paths(edges: &Edges, caves_count: u8) -> Vec<WeightsVec> {
                         }
                     }
                 };
-                if target_maybe_empty {
+                if target_tagged.is_zero {
                     let zero = WeightsVec::splat(0);
                     let lanes_zero = target
                         .iter()
                         .fold(WeightsMask::splat(true), |acc, v| acc & v.lanes_eq(zero));
-                    if lanes_zero.all() {
-                        stack[neighbor] = None;
-                    }
+                    target_tagged.is_zero = lanes_zero.all();
                 }
             }
         }
     }
-    stack[END].take().unwrap()
+    stack[END].take().unwrap().vals
+}
+
+struct ZeroTagVec {
+    is_zero: bool,
+    vals: Vec<WeightsVec>,
 }
 
 fn subvector_bfs_step<const SHIFT: usize>(
