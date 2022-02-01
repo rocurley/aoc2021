@@ -254,11 +254,8 @@ pub fn find_paths(edges: &Edges, caves_count: u8) -> Vec<WeightsVec> {
     let mut relevant_caves: Vec<Cave> = (0..caves_count).map(|i| Cave(i)).collect();
     relevant_caves.push(START);
     while !stack.non_end_empty() {
-        let mut old_stack = CaveMap::new();
-        std::mem::swap(&mut stack, &mut old_stack);
-        stack[END] = old_stack[END].take();
         for &head in relevant_caves.iter() {
-            let seen_weights = if let Some(sw) = old_stack[head].take() {
+            let seen_weights = if let Some(sw) = stack[head].take() {
                 sw
             } else {
                 continue;
@@ -271,13 +268,8 @@ pub fn find_paths(edges: &Edges, caves_count: u8) -> Vec<WeightsVec> {
                     continue;
                 }
                 let target_maybe_empty = stack[neighbor].is_none();
-                let target = match &mut stack[neighbor] {
-                    Some(t) => t,
-                    None => {
-                        stack[neighbor] = Some(vec![WeightsVec::splat(0); n_vectors]);
-                        stack[neighbor].as_mut().unwrap()
-                    }
-                };
+                let target =
+                    stack[neighbor].get_or_insert_with(|| vec![WeightsVec::splat(0); n_vectors]);
                 if neighbor == END {
                     let neighbor_weight = WeightsVec::splat(neighbor_weight as u32);
                     for (weight, target_weight) in seen_weights.iter().zip(target.iter_mut()) {
