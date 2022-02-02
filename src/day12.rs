@@ -185,7 +185,7 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
     edges
 }
 
-pub fn solve_inner(edges: &Edges) -> (Instant, Instant, (u32, u64)) {
+pub fn solve_inner(edges: &Edges) -> (Instant, Instant, (u32, u32)) {
     let small_loops = find_loops(edges);
     let loops_dfs = Instant::now();
     let paths = find_paths(edges);
@@ -194,27 +194,46 @@ pub fn solve_inner(edges: &Edges) -> (Instant, Instant, (u32, u64)) {
     (loops_dfs, paths_dfs, (one_count, count))
 }
 
-pub fn join(paths: &[WeightsVec], small_loops: &[u32]) -> (u32, u64) {
-    let mut one_count = 0;
-    let mut count: u64 = 0;
-    for (path_top_bits, weight_vec) in paths.into_iter().enumerate() {
-        for (path_lower_bits, &weight) in weight_vec.as_array().into_iter().enumerate() {
-            if weight == 0 {
-                continue;
-            }
-            let path = (path_top_bits * WEIGHTS_LANES | path_lower_bits) as Bitvector;
-            let mut total_loop_count = 0;
-            for (small_loop, &loop_count) in small_loops.iter().enumerate() {
-                let small_loop = small_loop as Bitvector;
-                if (small_loop & path).is_power_of_two() {
-                    total_loop_count += loop_count as usize;
+pub fn join(paths: &[WeightsVec], small_loops: &[u32]) -> (u32, u32) {
+    let mut count = WeightsVec::splat(0);
+    for (small_loop, &loop_count) in small_loops.iter().enumerate() {
+        if loop_count == 0 {
+            continue;
+        }
+        let mask0 = zero_and_mask(small_loop, loop_count);
+        let mask1 = one_and_mask(small_loop, loop_count);
+        for (path_top_bits, weight_vec) in paths.into_iter().enumerate() {
+            let mask = match ((path_top_bits * WEIGHTS_LANES) & small_loop).count_ones() {
+                0 => mask1,
+                1 => mask0,
+                _ => {
+                    continue;
                 }
-            }
-            count += weight as u64 * (1 + total_loop_count) as u64;
-            one_count += weight;
+            };
+            count += mask * weight_vec;
         }
     }
-    (one_count, count)
+    let one_count = paths.into_iter().sum::<WeightsVec>().horizontal_sum();
+    (one_count, one_count + count.horizontal_sum())
+}
+
+fn zero_and_mask(bv: usize, weight: u32) -> WeightsVec {
+    let mut out = WeightsVec::splat(0);
+    for i in 0..WEIGHTS_LANES {
+        if i & bv == 0 {
+            out[i] = weight;
+        }
+    }
+    out
+}
+fn one_and_mask(bv: usize, weight: u32) -> WeightsVec {
+    let mut out = WeightsVec::splat(0);
+    for i in 0..WEIGHTS_LANES {
+        if (i & bv).count_ones() == 1 {
+            out[i] = weight;
+        }
+    }
+    out
 }
 
 pub fn find_loops(edges: &Edges) -> Vec<u32> {
