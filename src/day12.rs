@@ -185,13 +185,18 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
     edges
 }
 
-pub fn solve_inner(edges: &Edges) -> (Instant, Instant, (usize, usize)) {
+pub fn solve_inner(edges: &Edges) -> (Instant, Instant, (u32, u64)) {
     let small_loops = find_loops(edges);
     let loops_dfs = Instant::now();
     let paths = find_paths(edges);
     let paths_dfs = Instant::now();
+    let (one_count, count) = join(&paths, &small_loops);
+    (loops_dfs, paths_dfs, (one_count, count))
+}
+
+pub fn join(paths: &[WeightsVec], small_loops: &[u32]) -> (u32, u64) {
     let mut one_count = 0;
-    let mut count = 0;
+    let mut count: u64 = 0;
     for (path_top_bits, weight_vec) in paths.into_iter().enumerate() {
         for (path_lower_bits, &weight) in weight_vec.as_array().into_iter().enumerate() {
             if weight == 0 {
@@ -205,14 +210,14 @@ pub fn solve_inner(edges: &Edges) -> (Instant, Instant, (usize, usize)) {
                     total_loop_count += loop_count as usize;
                 }
             }
-            count += weight as usize * (1 + total_loop_count);
+            count += weight as u64 * (1 + total_loop_count) as u64;
             one_count += weight;
         }
     }
-    (loops_dfs, paths_dfs, (one_count as usize, count))
+    (one_count, count)
 }
 
-fn find_loops(edges: &Edges) -> Vec<u32> {
+pub fn find_loops(edges: &Edges) -> Vec<u32> {
     let mut small_loops: Vec<u32> = vec![0; 1 << edges.count()];
     let mut stack = Vec::new();
     for i in 0..edges.count() {
