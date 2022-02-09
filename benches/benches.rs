@@ -1,4 +1,4 @@
-use aoc2021::day12::solve2_inner;
+use aoc2021::solve2_inner;
 use cpuprofiler::PROFILER;
 use criterion::profiler::Profiler;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
