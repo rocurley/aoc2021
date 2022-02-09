@@ -20,12 +20,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 edges.entry(x).or_insert_with(|| Vec::new()).push(y);
                 edges.entry(y).or_insert_with(|| Vec::new()).push(x);
             }
-            //solve2_inner(&edges)
-            let mut out = 0;
-            for i in 0..1_000_000_000 {
-                out += i;
-            }
-            out
+            solve2_inner(&edges)
         })
     });
 }
