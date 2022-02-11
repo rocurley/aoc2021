@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 type Edges<'a> = HashMap<&'a str, Vec<(&'a str, usize)>>;
+type PathWeights<'a> = HashMap<Vec<&'a str>, usize>;
 
 pub fn parse<'a, S: AsRef<str>>(input: &'a [S]) -> Edges<'a> {
     let mut big_edges = HashMap::new();
@@ -48,7 +49,7 @@ impl<'a> Path<'a> {
     }
 }
 
-pub fn solve(edges: &Edges) -> (usize, usize) {
+pub fn find_small_loops<'a>(edges: &Edges<'a>) -> PathWeights<'a> {
     let mut small_loops: HashMap<Vec<&str>, usize> = HashMap::new();
     for &k in edges.keys().filter(|k| *k != &"start" && *k != &"end") {
         let mut stack = vec![Path {
@@ -85,6 +86,10 @@ pub fn solve(edges: &Edges) -> (usize, usize) {
     for (k, v) in small_loops.iter_mut() {
         *v /= k.len();
     }
+    small_loops
+}
+
+pub fn find_paths<'a>(edges: &Edges<'a>) -> PathWeights<'a> {
     let mut stack = vec![Path {
         trail: vec!["start"],
         weight: 1,
@@ -113,6 +118,10 @@ pub fn solve(edges: &Edges) -> (usize, usize) {
             });
         }
     }
+    paths
+}
+
+pub fn join(small_loops: &PathWeights, paths: &PathWeights) -> (usize, usize) {
     let mut count = 0;
     let mut one_count = 0;
     for (path, weight) in paths {
@@ -127,6 +136,12 @@ pub fn solve(edges: &Edges) -> (usize, usize) {
         count += intersecting_loop_count * weight;
     }
     (one_count, count)
+}
+
+pub fn solve(edges: &Edges) -> (usize, usize) {
+    let small_loops = find_small_loops(edges);
+    let paths = find_paths(edges);
+    join(&small_loops, &paths)
 }
 
 fn is_small(k: &str) -> bool {

@@ -1,4 +1,4 @@
-use aoc2021::{parse, solve};
+use aoc2021::{find_paths, find_small_loops, join, parse, solve};
 use cpuprofiler::PROFILER;
 use criterion::profiler::Profiler;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
@@ -12,11 +12,30 @@ const input: [&'static str; 23] = [
 ];
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("solve2", |b| {
+    c.bench_function("combined", |b| {
         b.iter(|| {
             let edges = parse(black_box(&input));
             solve(&edges)
         })
+    });
+    c.bench_function("parse", |b| b.iter(|| parse(black_box(&input))));
+    c.bench_function("solve", |b| {
+        let edges = parse(&input);
+        b.iter(|| solve(black_box(&edges)))
+    });
+    c.bench_function("join", |b| {
+        let edges = parse(&input);
+        let small_loops = find_small_loops(&edges);
+        let paths = find_paths(&edges);
+        b.iter(|| join(black_box(&small_loops), black_box(&paths)))
+    });
+    c.bench_function("find_paths", |b| {
+        let edges = parse(&input);
+        b.iter(|| find_paths(black_box(&edges)))
+    });
+    c.bench_function("find_small_loops", |b| {
+        let edges = parse(&input);
+        b.iter(|| find_small_loops(black_box(&edges)))
     });
 }
 
