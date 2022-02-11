@@ -64,6 +64,9 @@ pub fn find_small_loops<'a>(edges: &Edges<'a>) -> PathWeights<'a> {
                 if neighbor == "end" {
                     continue;
                 }
+                if neighbor < k {
+                    continue;
+                }
                 let weight = path.weight * neighbor_weight;
                 if neighbor == k {
                     let mut ix = path.trail.clone();
@@ -82,9 +85,6 @@ pub fn find_small_loops<'a>(edges: &Edges<'a>) -> PathWeights<'a> {
                 });
             }
         }
-    }
-    for (k, v) in small_loops.iter_mut() {
-        *v /= k.len();
     }
     small_loops
 }
