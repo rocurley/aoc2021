@@ -1,47 +1,84 @@
 use std::collections::HashMap;
 
-type Edges<'a> = HashMap<&'a str, Vec<&'a str>>;
+type Edges<'a> = HashMap<&'a str, Vec<(&'a str, usize)>>;
 
 pub fn parse<'a, S: AsRef<str>>(input: &'a [S]) -> Edges<'a> {
-    let mut edges = HashMap::new();
+    let mut big_edges = HashMap::new();
+    let mut edges_raw = HashMap::new();
     for (x, y) in input
         .iter()
         .map(|line| line.as_ref().split_once("-").unwrap())
     {
-        edges.entry(x).or_insert_with(|| Vec::new()).push(y);
-        edges.entry(y).or_insert_with(|| Vec::new()).push(x);
+        match (is_small(x), is_small(y)) {
+            (false, false) => panic!("Cannot connect two big caves"),
+            (true, true) => {
+                let k = if x < y { (x, y) } else { (y, x) };
+                assert!(edges_raw.insert(k, 1).is_none());
+            }
+            (false, true) => big_edges.entry(x).or_insert(Vec::new()).push(y),
+            (true, false) => big_edges.entry(y).or_insert(Vec::new()).push(x),
+        }
+    }
+    for small_caves in big_edges.into_values() {
+        for (i, &x) in small_caves.iter().enumerate() {
+            for &y in small_caves[i..].iter() {
+                let k = if x < y { (x, y) } else { (y, x) };
+                *edges_raw.entry(k).or_insert(0) += 1;
+            }
+        }
+    }
+    let mut edges = HashMap::new();
+    for ((x, y), c) in edges_raw.into_iter() {
+        edges.entry(x).or_insert(Vec::new()).push((y, c));
+        if x != y {
+            edges.entry(y).or_insert(Vec::new()).push((x, c));
+        }
     }
     edges
 }
 
+pub struct Path<'a> {
+    trail: Vec<&'a str>,
+    weight: usize,
+}
+
+impl<'a> Path<'a> {
+    fn head(&self) -> &'a str {
+        self.trail.last().unwrap()
+    }
+}
+
 pub fn solve(edges: &Edges) -> (usize, usize) {
     let mut small_loops: HashMap<Vec<&str>, usize> = HashMap::new();
-    for k in edges
-        .keys()
-        .filter(|k| *k != &"start" && *k != &"end" && k.chars().next().unwrap().is_lowercase())
-    {
-        let mut stack = vec![vec![*k]];
+    for &k in edges.keys().filter(|k| *k != &"start" && *k != &"end") {
+        let mut stack = vec![Path {
+            trail: vec![k],
+            weight: 1,
+        }];
         while let Some(path) = stack.pop() {
-            for neighbor in &edges[path.last().unwrap()] {
-                if neighbor == &"start" {
+            for &(neighbor, neighbor_weight) in &edges[path.head()] {
+                if neighbor == "start" {
                     continue;
                 }
-                if neighbor == &"end" {
+                if neighbor == "end" {
                     continue;
                 }
+                let weight = path.weight * neighbor_weight;
                 if neighbor == k {
-                    let mut ix: Vec<&str> = path.iter().copied().filter(|x| is_small(x)).collect();
+                    let mut ix = path.trail.clone();
                     ix.sort();
-                    *small_loops.entry(ix).or_insert(0) += 1;
+                    *small_loops.entry(ix).or_insert(0) += weight;
                     continue;
                 }
-                let is_small = neighbor.chars().next().unwrap().is_lowercase();
-                if is_small && path.contains(neighbor) {
+                if path.trail.contains(&neighbor) {
                     continue;
                 }
-                let mut new_path = path.clone();
-                new_path.push(neighbor);
-                stack.push(new_path);
+                let mut new_trail = path.trail.clone();
+                new_trail.push(neighbor);
+                stack.push(Path {
+                    trail: new_trail,
+                    weight,
+                });
             }
         }
     }
@@ -50,34 +87,42 @@ pub fn solve(edges: &Edges) -> (usize, usize) {
     }
     let mut count = 0;
     let mut one_count = 0;
-    let mut stack = vec![vec!["start"]];
+    let mut stack = vec![Path {
+        trail: vec!["start"],
+        weight: 1,
+    }];
     while let Some(path) = stack.pop() {
-        for neighbor in &edges[path.last().unwrap()] {
-            if neighbor == &"start" {
+        for &(neighbor, neighbor_weight) in &edges[path.head()] {
+            if neighbor == "start" {
                 continue;
             }
-            if neighbor == &"end" {
-                count += 1;
-                one_count += 1;
+            let weight = path.weight * neighbor_weight;
+            if neighbor == "end" {
+                count += weight;
+                one_count += weight;
+                let mut intersecting_loop_count = 0;
                 for (small_loop, loop_count) in small_loops.iter() {
-                    if small_loop.iter().filter(|k| path.contains(k)).count() == 1 {
-                        count += loop_count;
+                    if small_loop.iter().filter(|k| path.trail.contains(k)).count() == 1 {
+                        intersecting_loop_count += loop_count;
                     }
                 }
+                count += intersecting_loop_count * weight;
                 continue;
             }
-            let is_small = is_small(neighbor);
-            if is_small && path.contains(neighbor) {
+            if path.trail.contains(&neighbor) {
                 continue;
             }
-            let mut new_path = path.clone();
-            new_path.push(neighbor);
-            stack.push(new_path);
+            let mut new_trail = path.trail.clone();
+            new_trail.push(neighbor);
+            stack.push(Path {
+                trail: new_trail,
+                weight,
+            });
         }
     }
     (one_count, count)
 }
 
 fn is_small(k: &str) -> bool {
-    k != "start" && k != "end" && k.chars().next().unwrap().is_lowercase()
+    k.chars().next().unwrap().is_lowercase()
 }
