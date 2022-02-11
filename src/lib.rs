@@ -85,12 +85,11 @@ pub fn solve(edges: &Edges) -> (usize, usize) {
     for (k, v) in small_loops.iter_mut() {
         *v /= k.len();
     }
-    let mut count = 0;
-    let mut one_count = 0;
     let mut stack = vec![Path {
         trail: vec!["start"],
         weight: 1,
     }];
+    let mut paths: HashMap<Vec<&str>, usize> = HashMap::new();
     while let Some(path) = stack.pop() {
         for &(neighbor, neighbor_weight) in &edges[path.head()] {
             if neighbor == "start" {
@@ -98,15 +97,9 @@ pub fn solve(edges: &Edges) -> (usize, usize) {
             }
             let weight = path.weight * neighbor_weight;
             if neighbor == "end" {
-                count += weight;
-                one_count += weight;
-                let mut intersecting_loop_count = 0;
-                for (small_loop, loop_count) in small_loops.iter() {
-                    if small_loop.iter().filter(|k| path.trail.contains(k)).count() == 1 {
-                        intersecting_loop_count += loop_count;
-                    }
-                }
-                count += intersecting_loop_count * weight;
+                let mut ix = path.trail.clone();
+                ix.sort();
+                *paths.entry(ix).or_insert(0) += weight;
                 continue;
             }
             if path.trail.contains(&neighbor) {
@@ -119,6 +112,19 @@ pub fn solve(edges: &Edges) -> (usize, usize) {
                 weight,
             });
         }
+    }
+    let mut count = 0;
+    let mut one_count = 0;
+    for (path, weight) in paths {
+        count += weight;
+        one_count += weight;
+        let mut intersecting_loop_count = 0;
+        for (small_loop, loop_count) in small_loops.iter() {
+            if small_loop.iter().filter(|k| path.contains(k)).count() == 1 {
+                intersecting_loop_count += loop_count;
+            }
+        }
+        count += intersecting_loop_count * weight;
     }
     (one_count, count)
 }
