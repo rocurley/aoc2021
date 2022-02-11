@@ -1,26 +1,75 @@
 use std::collections::HashMap;
 
-type Edges<'a> = HashMap<&'a str, Vec<(&'a str, usize)>>;
-type PathWeights<'a> = HashMap<Vec<&'a str>, usize>;
+#[derive(PartialEq, Eq, Copy, Clone, Hash, Ord, PartialOrd, Debug)]
+pub struct Cave(u8);
 
-pub fn parse<'a, S: AsRef<str>>(input: &'a [S]) -> Edges<'a> {
+const START: Cave = Cave(0x0fe);
+const END: Cave = Cave(0x0ff);
+const MAX_SMALL: usize = START.0 as usize;
+
+pub struct CaveParser<'a> {
+    smalls: Vec<&'a str>,
+}
+
+impl<'a> CaveParser<'a> {
+    pub fn new() -> Self {
+        CaveParser { smalls: Vec::new() }
+    }
+    pub fn parse(&mut self, k: &'a str) -> Option<Cave> {
+        if k == "start" {
+            return Some(START);
+        }
+        if k == "end" {
+            return Some(END);
+        }
+        let is_small = k.chars().next().unwrap().is_lowercase();
+        if !is_small {
+            return None;
+        }
+        match self.smalls.iter().position(|x| *x == k) {
+            None => {
+                self.smalls.push(k);
+                assert!(self.smalls.len() <= MAX_SMALL);
+                Some(Cave(self.smalls.len() as u8 - 1))
+            }
+            Some(i) => Some(Cave(i as u8)),
+        }
+    }
+}
+
+type Edges = HashMap<Cave, Vec<(Cave, usize)>>;
+type PathWeights = HashMap<Vec<Cave>, usize>;
+
+pub struct Path {
+    trail: Vec<Cave>,
+    weight: usize,
+}
+
+impl Path {
+    fn head(&self) -> Cave {
+        *self.trail.last().unwrap()
+    }
+}
+
+pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
     let mut big_edges = HashMap::new();
     let mut edges_raw = HashMap::new();
+    let mut parser = CaveParser::new();
     for (x, y) in input
         .iter()
         .map(|line| line.as_ref().split_once("-").unwrap())
     {
-        match (is_small(x), is_small(y)) {
-            (false, false) => panic!("Cannot connect two big caves"),
-            (true, true) => {
+        match (parser.parse(x), parser.parse(y)) {
+            (None, None) => panic!("Cannot connect two big caves"),
+            (Some(x), Some(y)) => {
                 let k = if x < y { (x, y) } else { (y, x) };
                 assert!(edges_raw.insert(k, 1).is_none());
             }
-            (false, true) => big_edges.entry(x).or_insert(Vec::new()).push(y),
-            (true, false) => big_edges.entry(y).or_insert(Vec::new()).push(x),
+            (None, Some(y)) => big_edges.entry(x).or_insert(Vec::new()).push(y),
+            (Some(x), None) => big_edges.entry(y).or_insert(Vec::new()).push(x),
         }
     }
-    for small_caves in big_edges.into_values() {
+    for (_, small_caves) in big_edges {
         for (i, &x) in small_caves.iter().enumerate() {
             for &y in small_caves[i..].iter() {
                 let k = if x < y { (x, y) } else { (y, x) };
@@ -38,30 +87,19 @@ pub fn parse<'a, S: AsRef<str>>(input: &'a [S]) -> Edges<'a> {
     edges
 }
 
-pub struct Path<'a> {
-    trail: Vec<&'a str>,
-    weight: usize,
-}
-
-impl<'a> Path<'a> {
-    fn head(&self) -> &'a str {
-        self.trail.last().unwrap()
-    }
-}
-
-pub fn find_small_loops<'a>(edges: &Edges<'a>) -> PathWeights<'a> {
-    let mut small_loops: HashMap<Vec<&str>, usize> = HashMap::new();
-    for &k in edges.keys().filter(|k| *k != &"start" && *k != &"end") {
+pub fn find_small_loops(edges: &Edges) -> PathWeights {
+    let mut small_loops: PathWeights = HashMap::new();
+    for &k in edges.keys().filter(|&&k| k != START && k != END) {
         let mut stack = vec![Path {
             trail: vec![k],
             weight: 1,
         }];
         while let Some(path) = stack.pop() {
-            for &(neighbor, neighbor_weight) in &edges[path.head()] {
-                if neighbor == "start" {
+            for &(neighbor, neighbor_weight) in &edges[&path.head()] {
+                if neighbor == START {
                     continue;
                 }
-                if neighbor == "end" {
+                if neighbor == END {
                     continue;
                 }
                 if neighbor < k {
@@ -89,19 +127,19 @@ pub fn find_small_loops<'a>(edges: &Edges<'a>) -> PathWeights<'a> {
     small_loops
 }
 
-pub fn find_paths<'a>(edges: &Edges<'a>) -> PathWeights<'a> {
+pub fn find_paths<'a>(edges: &Edges) -> PathWeights {
     let mut stack = vec![Path {
-        trail: vec!["start"],
+        trail: vec![START],
         weight: 1,
     }];
-    let mut paths: HashMap<Vec<&str>, usize> = HashMap::new();
+    let mut paths: PathWeights = HashMap::new();
     while let Some(path) = stack.pop() {
-        for &(neighbor, neighbor_weight) in &edges[path.head()] {
-            if neighbor == "start" {
+        for &(neighbor, neighbor_weight) in &edges[&path.head()] {
+            if neighbor == START {
                 continue;
             }
             let weight = path.weight * neighbor_weight;
-            if neighbor == "end" {
+            if neighbor == END {
                 let mut ix = path.trail.clone();
                 ix.sort();
                 *paths.entry(ix).or_insert(0) += weight;
@@ -142,8 +180,4 @@ pub fn solve(edges: &Edges) -> (usize, usize) {
     let small_loops = find_small_loops(edges);
     let paths = find_paths(edges);
     join(&small_loops, &paths)
-}
-
-fn is_small(k: &str) -> bool {
-    k.chars().next().unwrap().is_lowercase()
 }
