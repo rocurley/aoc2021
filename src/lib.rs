@@ -2,10 +2,15 @@ use std::collections::HashMap;
 
 #[derive(PartialEq, Eq, Copy, Clone, Hash, Ord, PartialOrd, Debug)]
 pub struct Cave(u8);
+impl Cave {
+    fn onehot(&self) -> Bitvector {
+        1 << self.0
+    }
+}
 
 const START: Cave = Cave(0x0fe);
 const END: Cave = Cave(0x0ff);
-const MAX_SMALL: usize = START.0 as usize;
+const MAX_SMALL: usize = std::mem::size_of::<Bitvector>() * 8;
 
 pub struct CaveParser<'a> {
     smalls: Vec<&'a str>,
@@ -37,18 +42,14 @@ impl<'a> CaveParser<'a> {
     }
 }
 
+type Bitvector = u16;
 type Edges = HashMap<Cave, Vec<(Cave, usize)>>;
-type PathWeights = HashMap<Vec<Cave>, usize>;
+type PathWeights = HashMap<Bitvector, usize>;
 
 pub struct Path {
-    trail: Vec<Cave>,
+    head: Cave,
+    seen: Bitvector,
     weight: usize,
-}
-
-impl Path {
-    fn head(&self) -> Cave {
-        *self.trail.last().unwrap()
-    }
 }
 
 pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
@@ -91,11 +92,12 @@ pub fn find_small_loops(edges: &Edges) -> PathWeights {
     let mut small_loops: PathWeights = HashMap::new();
     for &k in edges.keys().filter(|&&k| k != START && k != END) {
         let mut stack = vec![Path {
-            trail: vec![k],
+            head: k,
+            seen: k.onehot(),
             weight: 1,
         }];
         while let Some(path) = stack.pop() {
-            for &(neighbor, neighbor_weight) in &edges[&path.head()] {
+            for &(neighbor, neighbor_weight) in &edges[&path.head] {
                 if neighbor == START {
                     continue;
                 }
@@ -107,18 +109,16 @@ pub fn find_small_loops(edges: &Edges) -> PathWeights {
                 }
                 let weight = path.weight * neighbor_weight;
                 if neighbor == k {
-                    let mut ix = path.trail.clone();
-                    ix.sort();
-                    *small_loops.entry(ix).or_insert(0) += weight;
+                    *small_loops.entry(path.seen).or_insert(0) += weight;
                     continue;
                 }
-                if path.trail.contains(&neighbor) {
+                let neighbor_onehot = neighbor.onehot();
+                if path.seen & neighbor_onehot > 0 {
                     continue;
                 }
-                let mut new_trail = path.trail.clone();
-                new_trail.push(neighbor);
                 stack.push(Path {
-                    trail: new_trail,
+                    head: neighbor,
+                    seen: path.seen | neighbor_onehot,
                     weight,
                 });
             }
@@ -129,29 +129,28 @@ pub fn find_small_loops(edges: &Edges) -> PathWeights {
 
 pub fn find_paths<'a>(edges: &Edges) -> PathWeights {
     let mut stack = vec![Path {
-        trail: vec![START],
+        head: START,
+        seen: 0,
         weight: 1,
     }];
     let mut paths: PathWeights = HashMap::new();
     while let Some(path) = stack.pop() {
-        for &(neighbor, neighbor_weight) in &edges[&path.head()] {
+        for &(neighbor, neighbor_weight) in &edges[&path.head] {
             if neighbor == START {
                 continue;
             }
             let weight = path.weight * neighbor_weight;
             if neighbor == END {
-                let mut ix = path.trail.clone();
-                ix.sort();
-                *paths.entry(ix).or_insert(0) += weight;
+                *paths.entry(path.seen).or_insert(0) += weight;
                 continue;
             }
-            if path.trail.contains(&neighbor) {
+            let neighbor_onehot = neighbor.onehot();
+            if path.seen & neighbor_onehot > 0 {
                 continue;
             }
-            let mut new_trail = path.trail.clone();
-            new_trail.push(neighbor);
             stack.push(Path {
-                trail: new_trail,
+                head: neighbor,
+                seen: path.seen | neighbor_onehot,
                 weight,
             });
         }
@@ -167,7 +166,7 @@ pub fn join(small_loops: &PathWeights, paths: &PathWeights) -> (usize, usize) {
         one_count += weight;
         let mut intersecting_loop_count = 0;
         for (small_loop, loop_count) in small_loops.iter() {
-            if small_loop.iter().filter(|k| path.contains(k)).count() == 1 {
+            if (small_loop & path).count_ones() == 1 {
                 intersecting_loop_count += loop_count;
             }
         }
