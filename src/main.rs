@@ -1,4 +1,4 @@
-use aoc2021::solve1;
+use aoc2021::{parse, solve};
 
 use std::fs;
 use std::io;
@@ -10,5 +10,7 @@ fn main() {
         .lines()
         .collect::<io::Result<Vec<String>>>()
         .expect("coudln't read line");
-    solve1(&input);
+    let edges = parse(&input);
+    let (part1, part2) = solve(&edges);
+    dbg!(part1, part2);
 }

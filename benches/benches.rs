@@ -1,8 +1,7 @@
-use aoc2021::solve2_inner;
+use aoc2021::{parse, solve};
 use cpuprofiler::PROFILER;
 use criterion::profiler::Profiler;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::MutexGuard;
 
@@ -15,12 +14,8 @@ const input: [&'static str; 23] = [
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("solve2", |b| {
         b.iter(|| {
-            let mut edges = HashMap::new();
-            for (x, y) in input.iter().map(|line| line.split_once("-").unwrap()) {
-                edges.entry(x).or_insert_with(|| Vec::new()).push(y);
-                edges.entry(y).or_insert_with(|| Vec::new()).push(x);
-            }
-            solve2_inner(&edges)
+            let edges = parse(black_box(&input));
+            solve(&edges)
         })
     });
 }
