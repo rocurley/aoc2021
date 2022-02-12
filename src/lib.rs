@@ -1,6 +1,7 @@
+#![feature(portable_simd)]
 use smallvec::SmallVec;
-use std::collections::HashMap;
 use std::ops::{Index, IndexMut};
+use std::simd::{Mask, Simd, SimdElement};
 
 #[derive(PartialEq, Eq, Copy, Clone, Hash, Ord, PartialOrd, Debug)]
 pub struct Cave(u8);
@@ -14,6 +15,11 @@ const START: Cave = Cave(0x0fe);
 const END: Cave = Cave(0x0ff);
 const MAX_SMALL: usize = std::mem::size_of::<Bitvector>() * 8;
 const SMALLVEC_LEN: usize = MAX_SMALL + 2;
+
+type WeightsLane = u32;
+const WEIGHTS_LANES: usize = 16;
+type WeightsVec = Simd<WeightsLane, WEIGHTS_LANES>;
+type WeightsMask = Mask<<WeightsLane as SimdElement>::Mask, WEIGHTS_LANES>;
 
 pub struct CaveParser<'a> {
     smalls: Vec<&'a str>,
@@ -100,9 +106,19 @@ impl<T> IndexMut<Cave> for CaveMap<T> {
     }
 }
 
+fn alist_get_or_insert<K: Eq, V>(alist: &mut Vec<(K, V)>, target: K, default: V) -> &mut V {
+    match alist.iter().position(|(k, _)| *k == target) {
+        Some(i) => &mut alist[i].1,
+        None => {
+            alist.push((target, default));
+            &mut alist.last_mut().unwrap().1
+        }
+    }
+}
+
 pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
-    let mut big_edges = HashMap::new();
-    let mut edges_raw = HashMap::new();
+    let mut big_edges = Vec::new();
+    let mut edges_raw = Vec::new();
     let mut parser = CaveParser::new();
     for (x, y) in input
         .iter()
@@ -112,17 +128,17 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
             (None, None) => panic!("Cannot connect two big caves"),
             (Some(x), Some(y)) => {
                 let k = if x < y { (x, y) } else { (y, x) };
-                assert!(edges_raw.insert(k, 1).is_none());
+                edges_raw.push((k, 1));
             }
-            (None, Some(y)) => big_edges.entry(x).or_insert(Vec::new()).push(y),
-            (Some(x), None) => big_edges.entry(y).or_insert(Vec::new()).push(x),
+            (None, Some(y)) => alist_get_or_insert(&mut big_edges, x, Vec::new()).push(y),
+            (Some(x), None) => alist_get_or_insert(&mut big_edges, y, Vec::new()).push(x),
         }
     }
     for (_, small_caves) in big_edges {
         for (i, &x) in small_caves.iter().enumerate() {
             for &y in small_caves[i..].iter() {
                 let k = if x < y { (x, y) } else { (y, x) };
-                *edges_raw.entry(k).or_insert(0) += 1;
+                *alist_get_or_insert(&mut edges_raw, k, 0) += 1;
             }
         }
     }
@@ -177,50 +193,133 @@ pub fn find_small_loops(edges: &Edges) -> PathWeights {
     small_loops
 }
 
-pub fn find_paths<'a>(edges: &Edges) -> PathWeights {
-    let mut stack = vec![Path {
-        head: START,
-        seen: 0,
-        weight: 1,
-    }];
-    let mut paths: PathWeights = vec![0; 1 << edges.count()];
-    while let Some(path) = stack.pop() {
-        for &(neighbor, neighbor_weight) in &edges[path.head] {
-            if neighbor == START {
-                continue;
-            }
-            let weight = path.weight * neighbor_weight;
-            if neighbor == END {
-                paths[path.seen as usize] += weight;
-                continue;
-            }
-            let neighbor_onehot = neighbor.onehot();
-            if path.seen & neighbor_onehot > 0 {
-                continue;
-            }
-            stack.push(Path {
-                head: neighbor,
-                seen: path.seen | neighbor_onehot,
-                weight,
-            });
-        }
-    }
-    paths
+#[derive(PartialEq, Eq, Debug, Clone)]
+struct ZeroTagVec {
+    is_zero: bool,
+    vals: Vec<WeightsVec>,
 }
 
-pub fn join(small_loops: &PathWeights, paths: &PathWeights) -> (u32, u32) {
-    let mut count = 0;
-    let mut one_count = 0;
-    for (path, weight) in paths.iter().enumerate() {
-        count += weight;
-        one_count += weight;
-        let mut intersecting_loop_count = 0;
-        for (small_loop, loop_count) in small_loops.iter().enumerate() {
-            if (small_loop & path).count_ones() == 1 {
-                intersecting_loop_count += loop_count;
+fn subvector_bfs_step<const SHIFT: usize>(
+    neighbor_weight: u32,
+    seen_weights: &[WeightsVec],
+    target: &mut [WeightsVec],
+) {
+    let mut neighbor_weight_mask = WeightsVec::splat(neighbor_weight as u32);
+    for i in 0..WEIGHTS_LANES {
+        if (i / SHIFT) % 2 == 1 {
+            neighbor_weight_mask[i] = 0;
+        }
+    }
+    for (weight, target_weight) in seen_weights.iter().zip(target.iter_mut()) {
+        let masked_weight = (weight * neighbor_weight_mask).rotate_lanes_right::<SHIFT>();
+        *target_weight += masked_weight;
+    }
+}
+
+pub fn find_paths(edges: &Edges) -> Vec<WeightsVec> {
+    assert!((1 << edges.count()) >= WEIGHTS_LANES);
+    let n_vectors = (1 << edges.count()) / WEIGHTS_LANES;
+    let mut stack = CaveMap::new_cloned(
+        ZeroTagVec {
+            is_zero: true,
+            vals: vec![WeightsVec::splat(0); n_vectors],
+        },
+        edges.count(),
+    );
+    let start_vec = &mut stack[START];
+    start_vec.vals[0][0] = 1;
+    start_vec.is_zero = false;
+
+    let mut relevant_caves: Vec<Cave> = (0..edges.count()).map(|i| Cave(i)).collect();
+    relevant_caves.push(START);
+    // Arbitrary: just has to be filled with something of the correct length.
+    let mut seen_weights = vec![WeightsVec::splat(0); n_vectors];
+    let mut continue_loop = true;
+    while continue_loop {
+        continue_loop = false;
+        for &head in relevant_caves.iter() {
+            let seen_weights_ref = &mut stack[head];
+            if seen_weights_ref.is_zero {
+                continue;
+            }
+            continue_loop = true;
+            std::mem::swap(&mut seen_weights, &mut seen_weights_ref.vals);
+            seen_weights_ref.is_zero = true;
+            seen_weights_ref.vals.fill(WeightsVec::splat(0));
+            for &(neighbor, neighbor_weight) in &edges[head] {
+                if neighbor == START {
+                    continue;
+                }
+                if neighbor == head {
+                    continue;
+                }
+                let target_tagged = &mut stack[neighbor];
+                let target = &mut target_tagged.vals;
+                if neighbor == END {
+                    let neighbor_weight = WeightsVec::splat(neighbor_weight);
+                    for (weight, target_weight) in seen_weights.iter().zip(target.iter_mut()) {
+                        *target_weight += neighbor_weight * weight;
+                    }
+                    continue;
+                }
+                let shift = neighbor.onehot() as usize;
+                match shift {
+                    1 => {
+                        subvector_bfs_step::<1>(neighbor_weight, &seen_weights, target);
+                    }
+                    2 => {
+                        subvector_bfs_step::<2>(neighbor_weight, &seen_weights, target);
+                    }
+                    4 => {
+                        subvector_bfs_step::<4>(neighbor_weight, &seen_weights, target);
+                    }
+                    8 => {
+                        subvector_bfs_step::<8>(neighbor_weight, &seen_weights, target);
+                    }
+                    _ => {
+                        assert!(shift >= WEIGHTS_LANES);
+                        let neighbor_weight = WeightsVec::splat(neighbor_weight);
+                        let shift_vecs = shift / WEIGHTS_LANES;
+                        for (seen, &weight) in seen_weights.iter().enumerate() {
+                            if (seen / shift_vecs) % 2 == 1 {
+                                continue;
+                            }
+                            target[seen + shift_vecs] += weight * neighbor_weight;
+                        }
+                    }
+                };
+                if target_tagged.is_zero {
+                    let zero = WeightsVec::splat(0);
+                    let lanes_zero = target
+                        .iter()
+                        .fold(WeightsMask::splat(true), |acc, v| acc & v.lanes_eq(zero));
+                    target_tagged.is_zero = lanes_zero.all();
+                }
             }
         }
-        count += intersecting_loop_count * weight;
+    }
+    std::mem::replace(&mut stack[END].vals, Vec::new())
+}
+
+pub fn join(small_loops: &[u32], paths: &[WeightsVec]) -> (u32, u32) {
+    let mut one_count = 0;
+    let mut count = 0;
+    for (path_top_bits, weight_vec) in paths.into_iter().enumerate() {
+        for (path_lower_bits, &weight) in weight_vec.as_array().into_iter().enumerate() {
+            if weight == 0 {
+                continue;
+            }
+            let path = (path_top_bits * WEIGHTS_LANES | path_lower_bits) as Bitvector;
+            let mut total_loop_count = 0;
+            for (small_loop, &loop_count) in small_loops.iter().enumerate() {
+                let small_loop = small_loop as Bitvector;
+                if (small_loop & path).is_power_of_two() {
+                    total_loop_count += loop_count;
+                }
+            }
+            count += weight * (1 + total_loop_count);
+            one_count += weight;
+        }
     }
     (one_count, count)
 }
