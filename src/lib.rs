@@ -13,6 +13,7 @@ impl Cave {
 const START: Cave = Cave(0x0fe);
 const END: Cave = Cave(0x0ff);
 const MAX_SMALL: usize = std::mem::size_of::<Bitvector>() * 8;
+const SMALLVEC_LEN: usize = MAX_SMALL + 2;
 
 pub struct CaveParser<'a> {
     smalls: Vec<&'a str>,
@@ -45,13 +46,13 @@ impl<'a> CaveParser<'a> {
 }
 
 type Bitvector = u16;
-type Edges = CaveMap<Vec<(Cave, usize)>>;
-type PathWeights = Vec<usize>;
+type Edges = CaveMap<SmallVec<[(Cave, u32); SMALLVEC_LEN]>>;
+type PathWeights = Vec<u32>;
 
 pub struct Path {
     head: Cave,
     seen: Bitvector,
-    weight: usize,
+    weight: u32,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -126,7 +127,7 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
         }
     }
     let n_small_caves = parser.smalls.len() as u8;
-    let mut edges = CaveMap::new_cloned(Vec::new(), n_small_caves);
+    let mut edges = CaveMap::new_cloned(SmallVec::new(), n_small_caves);
     for ((x, y), c) in edges_raw.into_iter() {
         edges[x].push((y, c));
         if x != y {
@@ -207,7 +208,7 @@ pub fn find_paths<'a>(edges: &Edges) -> PathWeights {
     paths
 }
 
-pub fn join(small_loops: &PathWeights, paths: &PathWeights) -> (usize, usize) {
+pub fn join(small_loops: &PathWeights, paths: &PathWeights) -> (u32, u32) {
     let mut count = 0;
     let mut one_count = 0;
     for (path, weight) in paths.iter().enumerate() {
@@ -224,7 +225,7 @@ pub fn join(small_loops: &PathWeights, paths: &PathWeights) -> (usize, usize) {
     (one_count, count)
 }
 
-pub fn solve(edges: &Edges) -> (usize, usize) {
+pub fn solve(edges: &Edges) -> (u32, u32) {
     let small_loops = find_small_loops(edges);
     let paths = find_paths(edges);
     join(&small_loops, &paths)
