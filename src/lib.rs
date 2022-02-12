@@ -1,4 +1,6 @@
+use smallvec::SmallVec;
 use std::collections::HashMap;
+use std::ops::{Index, IndexMut};
 
 #[derive(PartialEq, Eq, Copy, Clone, Hash, Ord, PartialOrd, Debug)]
 pub struct Cave(u8);
@@ -43,13 +45,58 @@ impl<'a> CaveParser<'a> {
 }
 
 type Bitvector = u16;
-type Edges = HashMap<Cave, Vec<(Cave, usize)>>;
+type Edges = CaveMap<Vec<(Cave, usize)>>;
 type PathWeights = HashMap<Bitvector, usize>;
 
 pub struct Path {
     head: Cave,
     seen: Bitvector,
     weight: usize,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct CaveMap<T> {
+    start: T,
+    end: T,
+    small: SmallVec<[T; MAX_SMALL]>,
+}
+
+impl<T: Clone> CaveMap<T> {
+    fn new_cloned(init: T, n_caves: u8) -> Self {
+        let small = vec![init.clone(); n_caves as usize].into();
+        CaveMap {
+            start: init.clone(),
+            end: init,
+            small,
+        }
+    }
+}
+
+impl<T> CaveMap<T> {
+    fn count(&self) -> u8 {
+        self.small.len() as u8
+    }
+}
+
+impl<T> Index<Cave> for CaveMap<T> {
+    type Output = T;
+    fn index(&self, ix: Cave) -> &T {
+        match ix {
+            x if x == START => &self.start,
+            x if x == END => &self.end,
+            Cave(i) => &self.small[i as usize],
+        }
+    }
+}
+
+impl<T> IndexMut<Cave> for CaveMap<T> {
+    fn index_mut(&mut self, ix: Cave) -> &mut T {
+        match ix {
+            x if x == START => &mut self.start,
+            x if x == END => &mut self.end,
+            Cave(i) => &mut self.small[i as usize],
+        }
+    }
 }
 
 pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
@@ -78,11 +125,12 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
             }
         }
     }
-    let mut edges = HashMap::new();
+    let n_small_caves = parser.smalls.len() as u8;
+    let mut edges = CaveMap::new_cloned(Vec::new(), n_small_caves);
     for ((x, y), c) in edges_raw.into_iter() {
-        edges.entry(x).or_insert(Vec::new()).push((y, c));
+        edges[x].push((y, c));
         if x != y {
-            edges.entry(y).or_insert(Vec::new()).push((x, c));
+            edges[y].push((x, c));
         }
     }
     edges
@@ -90,14 +138,15 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
 
 pub fn find_small_loops(edges: &Edges) -> PathWeights {
     let mut small_loops: PathWeights = HashMap::new();
-    for &k in edges.keys().filter(|&&k| k != START && k != END) {
+    for i in 0..edges.count() {
+        let k = Cave(i);
         let mut stack = vec![Path {
             head: k,
             seen: k.onehot(),
             weight: 1,
         }];
         while let Some(path) = stack.pop() {
-            for &(neighbor, neighbor_weight) in &edges[&path.head] {
+            for &(neighbor, neighbor_weight) in &edges[path.head] {
                 if neighbor == START {
                     continue;
                 }
@@ -135,7 +184,7 @@ pub fn find_paths<'a>(edges: &Edges) -> PathWeights {
     }];
     let mut paths: PathWeights = HashMap::new();
     while let Some(path) = stack.pop() {
-        for &(neighbor, neighbor_weight) in &edges[&path.head] {
+        for &(neighbor, neighbor_weight) in &edges[path.head] {
             if neighbor == START {
                 continue;
             }
