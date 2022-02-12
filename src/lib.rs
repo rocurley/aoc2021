@@ -46,7 +46,7 @@ impl<'a> CaveParser<'a> {
 
 type Bitvector = u16;
 type Edges = CaveMap<Vec<(Cave, usize)>>;
-type PathWeights = HashMap<Bitvector, usize>;
+type PathWeights = Vec<usize>;
 
 pub struct Path {
     head: Cave,
@@ -137,7 +137,7 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
 }
 
 pub fn find_small_loops(edges: &Edges) -> PathWeights {
-    let mut small_loops: PathWeights = HashMap::new();
+    let mut small_loops: PathWeights = vec![0; 1 << edges.count()];
     for i in 0..edges.count() {
         let k = Cave(i);
         let mut stack = vec![Path {
@@ -158,7 +158,7 @@ pub fn find_small_loops(edges: &Edges) -> PathWeights {
                 }
                 let weight = path.weight * neighbor_weight;
                 if neighbor == k {
-                    *small_loops.entry(path.seen).or_insert(0) += weight;
+                    small_loops[path.seen as usize] += weight;
                     continue;
                 }
                 let neighbor_onehot = neighbor.onehot();
@@ -182,7 +182,7 @@ pub fn find_paths<'a>(edges: &Edges) -> PathWeights {
         seen: 0,
         weight: 1,
     }];
-    let mut paths: PathWeights = HashMap::new();
+    let mut paths: PathWeights = vec![0; 1 << edges.count()];
     while let Some(path) = stack.pop() {
         for &(neighbor, neighbor_weight) in &edges[path.head] {
             if neighbor == START {
@@ -190,7 +190,7 @@ pub fn find_paths<'a>(edges: &Edges) -> PathWeights {
             }
             let weight = path.weight * neighbor_weight;
             if neighbor == END {
-                *paths.entry(path.seen).or_insert(0) += weight;
+                paths[path.seen as usize] += weight;
                 continue;
             }
             let neighbor_onehot = neighbor.onehot();
@@ -210,11 +210,11 @@ pub fn find_paths<'a>(edges: &Edges) -> PathWeights {
 pub fn join(small_loops: &PathWeights, paths: &PathWeights) -> (usize, usize) {
     let mut count = 0;
     let mut one_count = 0;
-    for (path, weight) in paths {
+    for (path, weight) in paths.iter().enumerate() {
         count += weight;
         one_count += weight;
         let mut intersecting_loop_count = 0;
-        for (small_loop, loop_count) in small_loops.iter() {
+        for (small_loop, loop_count) in small_loops.iter().enumerate() {
             if (small_loop & path).count_ones() == 1 {
                 intersecting_loop_count += loop_count;
             }
