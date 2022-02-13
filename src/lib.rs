@@ -177,44 +177,69 @@ pub fn find_small_loops(edges: &Edges) -> PathWeights {
     small_loops
 }
 
-pub fn find_paths_and_join<'a>(edges: &Edges, small_loops: &PathWeights) -> (u32, u32) {
-    let mut stack = vec![Path {
+pub fn find_paths_and_join(edges: &Edges, small_loops: &PathWeights) -> (u32, u32) {
+    let path = MiniPath {
         head: START,
         seen: 0,
-        weight: 1,
-    }];
-    let mut count = 0;
+    };
+    let mut cache = CaveMap::new_cloned(vec![None; 1 << edges.count()], edges.count());
+    find_paths_and_join_inner(edges, small_loops, path, &mut cache)
+}
+
+#[derive(PartialEq, Eq, Hash)]
+pub struct MiniPath {
+    head: Cave,
+    seen: Bitvector,
+}
+
+fn find_paths_and_join_inner(
+    edges: &Edges,
+    small_loops: &PathWeights,
+    path: MiniPath,
+    cache: &mut CaveMap<Vec<Option<(u32, u32)>>>,
+) -> (u32, u32) {
+    if let Some(out) = cache[path.head][path.seen as usize] {
+        return out;
+    }
+    if path.head == END {
+        let mut intersecting_loop_count = 0;
+        for (small_loop, loop_count) in small_loops.iter().enumerate() {
+            if (small_loop as u16 & path.seen).count_ones() == 1 {
+                intersecting_loop_count += loop_count;
+            }
+        }
+        let count = intersecting_loop_count + 1;
+        return (1, count);
+    }
     let mut one_count = 0;
-    while let Some(path) = stack.pop() {
-        for &(neighbor, neighbor_weight) in &edges[path.head] {
-            if neighbor == START {
-                continue;
+    let mut count = 0;
+    for &(neighbor, neighbor_weight) in &edges[path.head] {
+        if neighbor == START {
+            continue;
+        }
+        let child = if neighbor == END {
+            MiniPath {
+                head: END,
+                seen: path.seen,
             }
-            let weight = path.weight * neighbor_weight;
-            if neighbor == END {
-                count += weight;
-                one_count += weight;
-                let mut intersecting_loop_count = 0;
-                for (small_loop, loop_count) in small_loops.iter().enumerate() {
-                    if (small_loop as u16 & path.seen).count_ones() == 1 {
-                        intersecting_loop_count += loop_count;
-                    }
-                }
-                count += intersecting_loop_count * weight;
-                continue;
-            }
+        } else {
             let neighbor_onehot = neighbor.onehot();
             if path.seen & neighbor_onehot > 0 {
                 continue;
             }
-            stack.push(Path {
+            MiniPath {
                 head: neighbor,
                 seen: path.seen | neighbor_onehot,
-                weight,
-            });
-        }
+            }
+        };
+        let (child_one_count, child_count) =
+            find_paths_and_join_inner(edges, small_loops, child, cache);
+        one_count += neighbor_weight * child_one_count;
+        count += neighbor_weight * child_count;
     }
-    (one_count, count)
+    let out = (one_count, count);
+    cache[path.head][path.seen as usize] = Some(out);
+    out
 }
 
 pub fn solve(edges: &Edges) -> (u32, u32) {
