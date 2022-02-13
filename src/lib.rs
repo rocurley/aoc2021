@@ -177,13 +177,14 @@ pub fn find_small_loops(edges: &Edges) -> PathWeights {
     small_loops
 }
 
-pub fn find_paths<'a>(edges: &Edges) -> PathWeights {
+pub fn find_paths_and_join<'a>(edges: &Edges, small_loops: &PathWeights) -> (u32, u32) {
     let mut stack = vec![Path {
         head: START,
         seen: 0,
         weight: 1,
     }];
-    let mut paths: PathWeights = vec![0; 1 << edges.count()];
+    let mut count = 0;
+    let mut one_count = 0;
     while let Some(path) = stack.pop() {
         for &(neighbor, neighbor_weight) in &edges[path.head] {
             if neighbor == START {
@@ -191,7 +192,15 @@ pub fn find_paths<'a>(edges: &Edges) -> PathWeights {
             }
             let weight = path.weight * neighbor_weight;
             if neighbor == END {
-                paths[path.seen as usize] += weight;
+                count += weight;
+                one_count += weight;
+                let mut intersecting_loop_count = 0;
+                for (small_loop, loop_count) in small_loops.iter().enumerate() {
+                    if (small_loop as u16 & path.seen).count_ones() == 1 {
+                        intersecting_loop_count += loop_count;
+                    }
+                }
+                count += intersecting_loop_count * weight;
                 continue;
             }
             let neighbor_onehot = neighbor.onehot();
@@ -205,28 +214,10 @@ pub fn find_paths<'a>(edges: &Edges) -> PathWeights {
             });
         }
     }
-    paths
-}
-
-pub fn join(small_loops: &PathWeights, paths: &PathWeights) -> (u32, u32) {
-    let mut count = 0;
-    let mut one_count = 0;
-    for (path, weight) in paths.iter().enumerate() {
-        count += weight;
-        one_count += weight;
-        let mut intersecting_loop_count = 0;
-        for (small_loop, loop_count) in small_loops.iter().enumerate() {
-            if (small_loop & path).count_ones() == 1 {
-                intersecting_loop_count += loop_count;
-            }
-        }
-        count += intersecting_loop_count * weight;
-    }
     (one_count, count)
 }
 
 pub fn solve(edges: &Edges) -> (u32, u32) {
     let small_loops = find_small_loops(edges);
-    let paths = find_paths(edges);
-    join(&small_loops, &paths)
+    find_paths_and_join(edges, &small_loops)
 }
