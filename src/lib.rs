@@ -109,9 +109,23 @@ fn alist_get_or_insert<K: Eq, V>(alist: &mut Vec<(K, V)>, target: K, default: V)
     }
 }
 
+fn array_alist_get_or_insert<K: Eq, V, const N: usize>(
+    alist: &mut ArrayVec<(K, V), N>,
+    target: K,
+    default: V,
+) -> &mut V {
+    match alist.iter().position(|(k, _)| *k == target) {
+        Some(i) => &mut alist[i].1,
+        None => {
+            alist.push((target, default));
+            &mut alist.last_mut().unwrap().1
+        }
+    }
+}
+
 pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
     let mut big_edges = Vec::new();
-    let mut edges_raw = Vec::new();
+    let mut edges = CaveMap::new_cloned(ArrayVec::new(), MAX_SMALL as u8);
     let mut parser = CaveParser::new();
     for (x, y) in input
         .iter()
@@ -120,27 +134,23 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
         match (parser.parse(x), parser.parse(y)) {
             (None, None) => panic!("Cannot connect two big caves"),
             (Some(x), Some(y)) => {
-                let k = if x < y { (x, y) } else { (y, x) };
-                edges_raw.push((k, 1));
+                edges[x].push((y, 1));
+                edges[y].push((x, 1));
             }
             (None, Some(y)) => alist_get_or_insert(&mut big_edges, x, Vec::new()).push(y),
             (Some(x), None) => alist_get_or_insert(&mut big_edges, y, Vec::new()).push(x),
         }
     }
+    let n_small_caves = parser.smalls.len();
+    edges.small.truncate(n_small_caves);
     for (_, small_caves) in big_edges {
         for (i, &x) in small_caves.iter().enumerate() {
             for &y in small_caves[i..].iter() {
-                let k = if x < y { (x, y) } else { (y, x) };
-                *alist_get_or_insert(&mut edges_raw, k, 0) += 1;
+                *array_alist_get_or_insert(&mut edges[x], y, 0) += 1;
+                if x != y {
+                    *array_alist_get_or_insert(&mut edges[y], x, 0) += 1;
+                }
             }
-        }
-    }
-    let n_small_caves = parser.smalls.len() as u8;
-    let mut edges = CaveMap::new_cloned(ArrayVec::new(), n_small_caves);
-    for ((x, y), c) in edges_raw.into_iter() {
-        edges[x].push((y, c));
-        if x != y {
-            edges[y].push((x, c));
         }
     }
     edges
