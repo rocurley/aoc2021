@@ -1,4 +1,4 @@
-use smallvec::SmallVec;
+use arrayvec::ArrayVec;
 use std::ops::{Index, IndexMut};
 
 #[derive(PartialEq, Eq, Copy, Clone, Hash, Ord, PartialOrd, Debug)]
@@ -45,7 +45,7 @@ impl<'a> CaveParser<'a> {
 }
 
 type Bitvector = u16;
-type Edges = CaveMap<SmallVec<[(Cave, u32); SMALLVEC_LEN]>>;
+type Edges = CaveMap<ArrayVec<(Cave, u32), SMALLVEC_LEN>>;
 type PathWeights = Vec<u32>;
 
 pub struct Path {
@@ -58,12 +58,12 @@ pub struct Path {
 pub struct CaveMap<T> {
     start: T,
     end: T,
-    small: SmallVec<[T; MAX_SMALL]>,
+    small: ArrayVec<T, MAX_SMALL>,
 }
 
 impl<T: Clone> CaveMap<T> {
     fn new_cloned(init: T, n_caves: u8) -> Self {
-        let small = vec![init.clone(); n_caves as usize].into();
+        let small = vec![init.clone(); n_caves as usize].into_iter().collect();
         CaveMap {
             start: init.clone(),
             end: init,
@@ -136,7 +136,7 @@ pub fn parse<S: AsRef<str>>(input: &[S]) -> Edges {
         }
     }
     let n_small_caves = parser.smalls.len() as u8;
-    let mut edges = CaveMap::new_cloned(SmallVec::new(), n_small_caves);
+    let mut edges = CaveMap::new_cloned(ArrayVec::new(), n_small_caves);
     for ((x, y), c) in edges_raw.into_iter() {
         edges[x].push((y, c));
         if x != y {

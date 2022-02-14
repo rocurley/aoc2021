@@ -6,7 +6,7 @@ edition = "2021"
 [lib]
 
 [dependencies]
-smallvec = {version = "1.8.0", features = ["union", "const_generics"]}
+arrayvec = "0.7.2"
 
 [dev-dependencies]
 criterion = "0.3"
