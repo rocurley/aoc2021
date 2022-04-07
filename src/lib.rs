@@ -99,6 +99,42 @@ impl<T> IndexMut<Cave> for CaveMap<T> {
     }
 }
 
+#[derive(PartialEq, Eq, Debug)]
+pub struct MiniPathMap<T> {
+    vec: Vec<T>,
+    n_caves: u8,
+}
+
+impl<T: Clone> MiniPathMap<T> {
+    fn new_cloned(init: T, n_caves: u8) -> Self {
+        let vec = vec![init.clone(); (n_caves as usize + 2) << n_caves];
+        MiniPathMap { vec, n_caves }
+    }
+}
+
+impl<T> Index<MiniPath> for MiniPathMap<T> {
+    type Output = T;
+    fn index(&self, ix: MiniPath) -> &T {
+        let row = match ix.head {
+            x if x == START => 0,
+            x if x == END => 1,
+            Cave(i) => i as usize + 2,
+        };
+        &self.vec[(row << self.n_caves) + ix.seen as usize]
+    }
+}
+
+impl<T> IndexMut<MiniPath> for MiniPathMap<T> {
+    fn index_mut(&mut self, ix: MiniPath) -> &mut T {
+        let row = match ix.head {
+            x if x == START => 0,
+            x if x == END => 1,
+            Cave(i) => i as usize + 2,
+        };
+        &mut self.vec[(row << self.n_caves) + ix.seen as usize]
+    }
+}
+
 fn alist_get_or_insert<K: Eq, V>(alist: &mut Vec<(K, V)>, target: K, default: V) -> &mut V {
     match alist.iter().position(|(k, _)| *k == target) {
         Some(i) => &mut alist[i].1,
@@ -203,11 +239,11 @@ pub fn find_paths_and_join(edges: &Edges, small_loops: &PathWeights) -> (u32, u3
         head: START,
         seen: 0,
     };
-    let mut cache = CaveMap::new_cloned(vec![CACHE_EMPTY; 1 << edges.count()], edges.count());
+    let mut cache = MiniPathMap::new_cloned(CACHE_EMPTY, edges.count());
     find_paths_and_join_inner(edges, small_loops, path, &mut cache)
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone)]
 pub struct MiniPath {
     head: Cave,
     seen: Bitvector,
@@ -217,9 +253,9 @@ fn find_paths_and_join_inner(
     edges: &Edges,
     small_loops: &PathWeights,
     path: MiniPath,
-    cache: &mut CaveMap<Vec<(u32, u32)>>,
+    cache: &mut MiniPathMap<(u32, u32)>,
 ) -> (u32, u32) {
-    let cache_value = cache[path.head][path.seen as usize];
+    let cache_value = cache[path];
     if cache_value != CACHE_EMPTY {
         return cache_value;
     }
@@ -232,7 +268,7 @@ fn find_paths_and_join_inner(
         }
         let count = intersecting_loop_count + 1;
         let out = (1, count);
-        cache[path.head][path.seen as usize] = out;
+        cache[path] = out;
         return out;
     }
     let mut one_count = 0;
@@ -262,7 +298,7 @@ fn find_paths_and_join_inner(
         count += neighbor_weight * child_count;
     }
     let out = (one_count, count);
-    cache[path.head][path.seen as usize] = out;
+    cache[path] = out;
     out
 }
 
