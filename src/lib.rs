@@ -196,12 +196,14 @@ pub fn find_small_loops(edges: &Edges) -> PathWeights {
     small_loops
 }
 
+const CACHE_EMPTY: (u32, u32) = (0, 1);
+
 pub fn find_paths_and_join(edges: &Edges, small_loops: &PathWeights) -> (u32, u32) {
     let path = MiniPath {
         head: START,
         seen: 0,
     };
-    let mut cache = CaveMap::new_cloned(vec![None; 1 << edges.count()], edges.count());
+    let mut cache = CaveMap::new_cloned(vec![CACHE_EMPTY; 1 << edges.count()], edges.count());
     find_paths_and_join_inner(edges, small_loops, path, &mut cache)
 }
 
@@ -215,10 +217,11 @@ fn find_paths_and_join_inner(
     edges: &Edges,
     small_loops: &PathWeights,
     path: MiniPath,
-    cache: &mut CaveMap<Vec<Option<(u32, u32)>>>,
+    cache: &mut CaveMap<Vec<(u32, u32)>>,
 ) -> (u32, u32) {
-    if let Some(out) = cache[path.head][path.seen as usize] {
-        return out;
+    let cache_value = cache[path.head][path.seen as usize];
+    if cache_value != CACHE_EMPTY {
+        return cache_value;
     }
     if path.head == END {
         let mut intersecting_loop_count = 0;
@@ -229,7 +232,7 @@ fn find_paths_and_join_inner(
         }
         let count = intersecting_loop_count + 1;
         let out = (1, count);
-        cache[path.head][path.seen as usize] = Some(out);
+        cache[path.head][path.seen as usize] = out;
         return out;
     }
     let mut one_count = 0;
@@ -259,7 +262,7 @@ fn find_paths_and_join_inner(
         count += neighbor_weight * child_count;
     }
     let out = (one_count, count);
-    cache[path.head][path.seen as usize] = Some(out);
+    cache[path.head][path.seen as usize] = out;
     out
 }
 
