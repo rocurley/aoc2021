@@ -228,7 +228,9 @@ fn find_paths_and_join_inner(
             }
         }
         let count = intersecting_loop_count + 1;
-        return (1, count);
+        let out = (1, count);
+        cache[path.head][path.seen as usize] = Some(out);
+        return out;
     }
     let mut one_count = 0;
     let mut count = 0;
